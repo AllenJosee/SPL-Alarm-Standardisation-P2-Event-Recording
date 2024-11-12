@@ -1,9 +1,11 @@
+# %%
 import cv2
-
 
 # Open video file or capturing device (0 for the first connected camera)
 cap = cv2.VideoCapture("../../data/raw/sample_shopfloor_footage_2.mp4")
 # For capturing from a webcam, you can use cap = cv2.VideoCapture(0)
+
+print(cap.grab())
 
 # Check if the video opened successfully
 if not cap.isOpened():
