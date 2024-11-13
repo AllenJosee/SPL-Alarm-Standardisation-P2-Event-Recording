@@ -1,20 +1,31 @@
-import numpy as np
-import cv2 as cv
+# %%
+import cv2
 
-cap = cv.VideoCapture("vtest.avi")
+# Open video file or capturing device (0 for the first connected camera)
+cap = cv2.VideoCapture("../../data/raw/sample_shopfloor_footage_2.mp4")
+# For capturing from a webcam, you can use cap = cv2.VideoCapture(0)
 
+print(cap.grab())
+
+# Check if the video opened successfully
+if not cap.isOpened():
+    print("Error: Could not open video.")
+    exit()
+
+# Read and display frames in a loop
 while cap.isOpened():
-    ret, frame = cap.read()
-
-    # if frame is read correctly ret is True
+    ret, frame = cap.read()  # Read a new frame from the video
     if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
-    gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-
-    cv.imshow("frame", gray)
-    if cv.waitKey(1) == ord("q"):
+        print("End of video or can't read the frame.")
         break
 
+    # Display the frame
+    cv2.imshow("Video", frame)
+
+    # Press 'q' to exit video display early
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+# Release video capture and close windows
 cap.release()
-cv.destroyAllWindows()
+cv2.destroyAllWindows()
