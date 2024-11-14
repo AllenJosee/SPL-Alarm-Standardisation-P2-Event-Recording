@@ -1,54 +1,45 @@
-from processing.video_recorder import record_video
+from test_video_recorder import record_video
 from datetime import datetime
 
+# %% Directoy allocations
+log_file = "/home/pi/dashcam/video_log.txt"
+vid_dir = "C:/Users\SPLC4022\OneDrive - Shimano\Documents\GitHub\SPL-Alarm-Standardisation-P2-Event-Recording\output/video directory/"
+max_segments = 5  # Maximum number of segments to keep in the circular buffer
 
+
+# %% Class
 class EventRecording:
     def __init__(self):
         self.state = "IDLE"  # Initial state
 
-    def video_record(self):
+    def init_camera(self):
+        # TODO: Init camera
+        if self.state == "":
+            self.state = "INITIALISE-EVENT REC. SYSTEM"
+
+    def start_record(self):
         if self.state == "IDLE":
             self.state = "RECORDING"
-            dtCurrDate = datetime.now()
-            dtCurrDate = dtCurrDate.strftime("%Y%m%d-%H%M%S")
 
-            # print(dtCurrDate)
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S%f")
+            record_video(f"{vid_dir}{timestamp}.mp4", duration=3, source=0)
             print("Transitioning to RECORDING state.")
+            # TODO: stop video recording if stopped in HMI
 
         else:
             print("Cannot insert coin. Machine is already processing.")
-
-    def insert_coin(self):
-        if self.state == "IDLE":
-            self.state = "PROCESSING"
-            print("Coin inserted. Transitioning to PROCESSING state.")
-        else:
-            print("Cannot insert coin. Machine is already processing.")
-
-    def select_product(self):
-        if self.state == "PROCESSING":
-            self.state = "DISPENSING"
-            print("Product selected. Transitioning to DISPENSING state.")
-        else:
-            print("Cannot select product. Please insert a coin first.")
-
-    def dispense(self):
-        if self.state == "DISPENSING":
-            self.state = "IDLE"
-            print("Dispensing product. Transitioning back to IDLE state.")
-        else:
-            print("Cannot dispense. Complete previous steps.")
 
     def reset(self):
+        # TODO: Clear/reset any needed things
         self.state = "IDLE"
         print("Machine reset. Back to IDLE state.")
+
+    def test1(self):
+        pass
 
 
 # %% Create Object
 machine = EventRecording()
 
 # %%# Call Functions
-machine.video_record()  # Should go to PROCESSING
-# machine.select_product()  # Should go to DISPENSING
-# machine.dispense()  # Should go back to IDLE
-# machine.reset()  # Resets to IDLE
+machine.start_record()
