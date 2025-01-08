@@ -8,6 +8,7 @@ import os
 log_file = "/home/pi/dashcam/video_log.txt"
 vid_dir = "C:/Users/SPLC4022/OneDrive - Shimano/Documents/GitHub/SPL-Alarm-Standardisation-P2-Event-Recording/output/video directory/"
 max_segments = 3  # Maximum number of segments to keep in the circular buffer
+video_length = 3
 
 
 class EventRecording:
@@ -20,15 +21,9 @@ class EventRecording:
             self.state = "INITIALISE-EVENT REC. SYSTEM"
 
     def start_record(self):
-        if self.state == "IDLE":
-            self.state = "RECORDING"
-
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S%f")
-            record_video(f"{vid_dir}{timestamp}.mp4", duration=3, source=0)
-            print("Transitioning to RECORDING state.")
-
-        else:
-            print("Cannot insert coin. Machine is already processing.")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S%f")
+        record_video(f"{vid_dir}{timestamp}.mp4", duration=video_length, source=0)
+        print(timestamp + " recording completed.")
 
     def reset(self):
         self.state = "IDLE"
@@ -41,7 +36,7 @@ class EventRecording:
                 file_path = os.path.join(vid_dir, file)
                 if os.path.isfile(file_path):
                     os.remove(file_path)
-                print("All files deleted successfully.")
+                print(file + " deleted successfully.")
 
         except OSError:
             print("Error occurred while deleting files.")
@@ -49,7 +44,7 @@ class EventRecording:
     def loopvidremove(self, log_file, vid_dir):
         # Check if the number of files exceeds `max_segments`, delete oldest
         files = sorted(os.listdir(vid_dir))
-        print(files)
+        # print(files)
         if len(files) > max_segments:
             # Remove the oldest file
             oldest_file = os.path.join(vid_dir, files[0])
@@ -60,6 +55,8 @@ class EventRecording:
 machine = EventRecording()
 
 # %% Call Functions
-# machine.start_record()
-# machine.loopvidremove(log_file, vid_dir)
+
 # machine.deleteallvids(vid_dir)
+while True:
+    machine.start_record()
+    machine.loopvidremove(log_file, vid_dir)
