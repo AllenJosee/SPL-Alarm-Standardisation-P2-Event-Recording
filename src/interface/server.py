@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 # Define directories
 RECORDINGS_DIR = "src/recordings"
-INCIDENTS_DIR = "src/recordings/incidents"
+INCIDENTS_DIR = "src/incidents"
 VIDEO_METADATA_FILE = "src/videos.json"
 
 # Create folders to save videos
