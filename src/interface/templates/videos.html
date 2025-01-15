@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recorded Videos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 10px;
+        }
+        nav {
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+        }
+        nav a {
+            text-decoration: none;
+            color: #333;
+            margin: 0 10px;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        table th {
+            background-color: #f4f4f4;
+        }
+        .actions a {
+            margin-right: 10px;
+            text-decoration: none;
+            color: #007BFF;
+        }
+        .actions a:hover {
+            text-decoration: underline;
+        }
+        .incident-section {
+            margin-top: 50px;
+        }
+        .update-button {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .update-button button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .update-button button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Recorded Videos</h1>
+    </header>
+    <nav>
+        <a href="/">Home</a>
+    </nav>
+    <div class="container">
+        <div class="update-button">
+            <form method="POST" action="/update_info">
+                <button type="submit">Update Info</button>
+            </form>
+        </div>
+
+        <h2>Video List</h2>
+        {% if videos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Timestamp</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for video in videos %}
+                <tr>
+                    <td>{{ video.filename }}</td>
+                    <td>{{ video.timestamp }}</td>
+                    <td class="actions">
+                        <a href="/download/{{ video.filename }}" target="_blank">Download</a>
+                        <a href="/static/recordings/{{ video.filename }}" target="_blank">Play</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No videos recorded yet.</p>
+        {% endif %}
+
+        <div class="incident-section">
+            <h2>Incident Videos</h2>
+            {% if incident_videos %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for video in incident_videos %}
+                    <tr>
+                        <td>{{ video.filename }}</td>
+                        <td class="actions">
+                            <a href="/static/{{ video.path }}" target="_blank">Download</a>
+                            <a href="/static/{{ video.path }}" target="_blank">Play</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No incident videos available.</p>
+            {% endif %}

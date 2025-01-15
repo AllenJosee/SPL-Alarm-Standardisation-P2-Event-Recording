@@ -7,6 +7,7 @@ import os
 # %% Directoy allocations
 log_file = "/home/pi/dashcam/video_log.txt"
 vid_dir = "C:/Users/SPLC4022/OneDrive - Shimano/Documents/GitHub/SPL-Alarm-Standardisation-P2-Event-Recording/output/video directory/"
+
 max_segments = 3  # Maximum number of segments to keep in the circular buffer
 video_length = 3
 
@@ -44,19 +45,19 @@ class EventRecording:
     def loopvidremove(self, log_file, vid_dir):
         # Check if the number of files exceeds `max_segments`, delete oldest
         files = sorted(os.listdir(vid_dir))
-        # print(files)
+
         if len(files) > max_segments:
             # Remove the oldest file
             oldest_file = os.path.join(vid_dir, files[0])
             os.remove(oldest_file)
+            print(files[0] + " deleted successfully.")
 
 
 # %% Create Object
 machine = EventRecording()
 
 # %% Call Functions
-
-# machine.deleteallvids(vid_dir)
 while True:
     machine.start_record()
     machine.loopvidremove(log_file, vid_dir)
+    # machine.deleteallvids(vid_dir)

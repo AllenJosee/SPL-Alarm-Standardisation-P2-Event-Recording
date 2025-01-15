@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Dashcam</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+        nav {
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+        }
+        nav a {
+            text-decoration: none;
+            color: #333;
+            margin: 0 10px;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            padding: 20px;
+        }
+        video, img {
+            border: 2px solid #333;
+            width: 640px;
+            height: 480px;
+        }
+        form {
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Webcam Dashcam</h1>
+    </header>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/videos">Recorded Videos</a>
+    </nav>
+    <div class="container">
+        <h2>Live Stream</h2>
+        <div>
+            <img src="/video_feed" alt="Live Video Stream">
+        </div>
+        <h2>Controls</h2>
+        <form method="POST" action="/start_recording">
+            <button type="submit">Start Recording</button>
+        </form>
+        <form method="POST" action="/stop_recording">
+            <button type="submit">Stop Recording</button>
+        </form>
+        <form method="POST" action="/simulate_incident">
+            <button type="submit">Simulate Incident</button>
+        </form>
+        <h2>Settings</h2>
+        <form method="POST" action="/update_settings">
+            <label for="max_videos">Max Videos:</label>
+            <input type="number" name="max_videos" id="max_videos" value="{{ max_videos }}">
+            <br>
+            <label for="video_duration">Video Duration (seconds):</label>
+            <input type="number" name="video_duration" id="video_duration" value="{{ video_duration }}">
+            <br>
+            <button type="submit">Update Settings</button>
+        </form>
+    </div>
+</body>
+</html>

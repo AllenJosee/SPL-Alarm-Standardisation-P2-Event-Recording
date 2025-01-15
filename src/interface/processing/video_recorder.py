@@ -4,16 +4,9 @@ import cv2
 import time
 
 
-def record_video(output_filename="output_clip.mp4", duration=0, source=0):
-    """
-    Records a video from a given source for a specified duration and saves it to a file.
-
-    Parameters:
-    - output_filename (str): The filename for the saved video clip.
-    - duration (int): The duration of the recording in seconds.
-    - source (int or str): The video source (0 for default camera, or video file path).
-    """
-
+def record_video(
+    output_filename="output_clip.mp4", duration=0, source=0, setRecordstop=False
+):
     # Open video capture (0 for the default camera, or specify a video file path)
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -42,7 +35,7 @@ def record_video(output_filename="output_clip.mp4", duration=0, source=0):
         cv2.imshow("Recording", frame)
 
         # Stop capturing after the specified duration
-        if time.time() - start_time > duration:
+        if ((time.time() - start_time) > duration) or (setRecordstop):
             print("Recording complete.")
             break
 
