@@ -12,12 +12,26 @@ app = Flask(__name__)
 RECORDINGS_DIR = "src/recordings"
 INCIDENTS_DIR = "src/incidents"
 VIDEO_METADATA_FILE = "src/videos.json"
+SETTINGS_FILE = "src/settings.json"
 
 # Create folders to save videos
 if not os.path.exists(RECORDINGS_DIR):
     os.makedirs(RECORDINGS_DIR)
 if not os.path.exists(INCIDENTS_DIR):
     os.makedirs(INCIDENTS_DIR)
+
+
+# Default settings
+default_settings = {"max_videos": 5, "video_duration": 5}
+
+# Ensure settings file exists
+if not os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(default_settings, f)
+
+# Load settings
+with open(SETTINGS_FILE, "r") as f:
+    settings = json.load(f)
 
 # Ensure JSON file exists
 if not os.path.exists(VIDEO_METADATA_FILE):
@@ -74,9 +88,22 @@ def videos():
 
 @app.route("/update_settings", methods=["POST"])
 def update_settings():
-    global max_videos, video_duration
-    max_videos = int(request.form["max_videos"])
-    video_duration = int(request.form["video_duration"])
+    global settings
+
+    # Get new settings from form data
+    max_videos = request.form.get("max_videos", type=int)
+    video_duration = request.form.get("video_duration", type=int)
+
+    # Update settings
+    if max_videos is not None:
+        settings["max_videos"] = max_videos
+    if video_duration is not None:
+        settings["video_duration"] = video_duration
+
+    # Save updated settings to file
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings, f)
+
     return redirect(url_for("index"))
 
 
