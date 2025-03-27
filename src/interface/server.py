@@ -44,8 +44,8 @@ if not os.path.exists(VIDEO_METADATA_FILE):
 
 camera = cv2.VideoCapture(0)
 recording = False
-max_videos = 5
-video_duration = 5  # default duration in seconds
+#max_videos = 5
+#video_duration = 5  # default duration in seconds
 
 
 # Load videos from folder
@@ -136,8 +136,7 @@ def logout():
     return redirect(url_for('login'))
 
 
-
-
+#Normal pages
 @app.route("/videos")
 @login_required
 def videos():
@@ -169,6 +168,10 @@ def update_settings():
     max_videos = request.form.get("max_videos", type=int)
     video_duration = request.form.get("video_duration", type=int)
 
+    # Debugging statements
+    print(f"Received max_videos: {max_videos}")
+    print(f"Received video_duration: {video_duration}")
+
     # Update settings
     if max_videos is not None:
         settings["max_videos"] = max_videos
@@ -178,6 +181,9 @@ def update_settings():
     # Save updated settings to file
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f)
+    
+    # Debugging statement
+    print(f"Updated settings: {settings}")
 
     return redirect(url_for("index"))
 
@@ -249,6 +255,8 @@ def stop_recording():
     recording = False
     return "", 204
 
+max_viedos = settings["max_videos"]
+video_duration = settings["video_duration"]
 
 def record_video():
     global recording
@@ -270,7 +278,7 @@ def record_video():
         out.release()
 
         # Ensure recording count doesn't exceed the limit
-        if len(load_videos_from_folder(RECORDINGS_DIR)) > max_videos:
+        if len(load_videos_from_folder(RECORDINGS_DIR)) > max_viedos:
             oldest_video = sorted(
                 os.listdir(RECORDINGS_DIR),
                 key=lambda x: os.path.getctime(os.path.join(RECORDINGS_DIR, x)),
