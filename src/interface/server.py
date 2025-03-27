@@ -15,7 +15,7 @@ app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a4'
 # Define directories
 RECORDINGS_DIR = "src/recordings"
 INCIDENTS_DIR = "src/incidents"
-VIDEO_METADATA_FILE = "src/videos.json"
+VIDEO_METADATA_FILE = "src/interface/src/videos.json"
 SETTINGS_FILE = "src/settings.json"
 
 # Create folders to save videos
@@ -23,7 +23,6 @@ if not os.path.exists(RECORDINGS_DIR):
     os.makedirs(RECORDINGS_DIR)
 if not os.path.exists(INCIDENTS_DIR):
     os.makedirs(INCIDENTS_DIR)
-
 
 # Default settings
 default_settings = {"max_videos": 5, "video_duration": 5}
@@ -44,8 +43,8 @@ if not os.path.exists(VIDEO_METADATA_FILE):
 
 camera = cv2.VideoCapture(0)
 recording = False
-#max_videos = 5
-#video_duration = 5  # default duration in seconds
+max_viedos = settings["max_videos"]
+video_duration = settings["video_duration"]
 
 
 # Load videos from folder
@@ -214,7 +213,6 @@ def simulate_incident():
         shutil.copy(os.path.join(RECORDINGS_DIR, video["filename"]), incident_folder)
         if len(os.listdir(incident_folder)) >= 6:  # Limit to 6 videos
             break
-
     return redirect(url_for("videos"))
 
 
@@ -255,12 +253,19 @@ def stop_recording():
     recording = False
     return "", 204
 
-max_viedos = settings["max_videos"]
-video_duration = settings["video_duration"]
 
 def record_video():
     global recording
+    
+    # Load settings from JSON file
+    with open(SETTINGS_FILE, "r") as f:
+        settings = json.load(f)
+    
     while recording:
+        
+        video_duration = settings["video_duration"]
+        max_videos = settings["max_videos"]
+
         filename = time.strftime("%Y%m%d-%H%M%S") + ".avi"
         filepath = os.path.join(RECORDINGS_DIR, filename)
 
@@ -276,9 +281,9 @@ def record_video():
                 break
 
         out.release()
-
+        
         # Ensure recording count doesn't exceed the limit
-        if len(load_videos_from_folder(RECORDINGS_DIR)) > max_viedos:
+        if len(load_videos_from_folder(RECORDINGS_DIR)) > max_videos:
             oldest_video = sorted(
                 os.listdir(RECORDINGS_DIR),
                 key=lambda x: os.path.getctime(os.path.join(RECORDINGS_DIR, x)),
