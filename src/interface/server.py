@@ -51,7 +51,7 @@ video_duration = settings["video_duration"]
 def load_videos_from_folder(folder):
     videos = []
     for file in os.listdir(folder):
-        if file.endswith(".avi"):
+        if file.endswith(".mp4"):
             filepath = os.path.join(folder, file)
             videos.append(
                 {"filename": file, "timestamp": time.ctime(os.path.getctime(filepath))}
@@ -266,10 +266,10 @@ def record_video():
         video_duration = settings["video_duration"]
         max_videos = settings["max_videos"]
 
-        filename = time.strftime("%Y%m%d-%H%M%S") + ".avi"
+        filename = time.strftime("%Y%m%d-%H%M%S") + ".mp4"
         filepath = os.path.join(RECORDINGS_DIR, filename)
 
-        fourcc = cv2.VideoWriter_fourcc(*"XVID")
+        fourcc = cv2.VideoWriter_fourcc(*"MP4V")
         out = cv2.VideoWriter(filepath, fourcc, 20.0, (640, 480))
         start_time = time.time()
 
