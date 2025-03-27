@@ -60,3 +60,5 @@ project_name/
 - **Configuration**: Include config files to simplify adjusting parameters for processing and detection.
 
 This structure allows for flexibility and scalability, making it easier to add functionality as the project grows.
+=======
+

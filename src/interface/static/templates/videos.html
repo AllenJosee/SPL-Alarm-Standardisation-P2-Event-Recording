@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recorded Videos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/videos.css') }}">
+</head>
+<body>
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Testing" class="logo">
+            </div>
+            <div><h1>Shimano Singapore</h1></div>
+            <div><h3 style="text-align: left; padding: 5px;"> ADS Fault Monitoring Dashboard </h3></div>
+        </div>
+        <nav class="navbar">
+            <div class="nav-links">
+              <a href="/">Home</a>
+              <a href="/videos">Recorded Videos</a>
+              <a href="/incident_videos">Incident Video</a>
+              <a href="/settings_page">Settings</a>    
+            </div>
+        </nav>
+    </header>
+
+    
+    <div class="container">
+        <div class="center-container">
+            <form method="POST" action="/update_info">
+                <button type="submit" class="control-button green">Update Info</button>
+            </form>
+        </div>
+        
+
+        <h2>Video List</h2>
+        {% if videos %}
+        <table class="styled-table">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Timestamp</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for video in videos %}
+                <tr>
+                    <td>{{ video.filename }}</td>
+                    <td>{{ video.timestamp }}</td>
+                    <td class="actions">
+                        <button onclick="playVideo('{{video.filename}}')" class="action-button play-button">Play</button>
+                        <a href="/download/{{ video.filename }}" class="action-button download-button" target="_blank">Download</a>
+                       <!--<a href="/static/recordings/{{ video.filename }}" class="action-button view-button" target="_blank">View</a> --> 
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-videos">No videos recorded yet.</p>
+        {% endif %}
+
+        <div class="playback-section">
+            <h3>Playback</h3>
+            <video id="video-player" controls>
+                <source id="video-source" src="" type="video/mp4"></video>
+        </div>
+    
+        <script>
+            function playVideo(filename) {
+                const videoSource = document.getElementById("video-source");
+                const videoPlayer = document.getElementById("video-player");
+                videoSource.src = `/src/recordings/${filename}`;
+                videoPlayer.load();
+                videoPlayer.scrollIntoView({ behavior: "smooth" }); 
+            }
+        </script>
+    </div>
+</body>
+</html>
+
+        

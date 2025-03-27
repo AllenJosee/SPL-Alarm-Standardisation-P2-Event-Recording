@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Viewer with Recording Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .webcam-container {
+            position: right;
+        }
+        img {
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            max-width: 640px;
+            width: 50%;
+            height: auto;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+    <script>
+        function updateStatus(message) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+        }
+
+        function startRecording() {
+            fetch('/start_recording', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => updateStatus(data));
+        }
+
+        function stopRecording() {
+            fetch('/stop_recording', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => updateStatus(data));
+        }
+    </script>
+</head>
+<body>
+    <div class="webcam-container">
+        <img src="{{ url_for('video_feed') }}" alt="Webcam Feed">
+        <div id="status">Status: Not recording</div>
+    </div>
+    <div class="controls">
+        <button onclick="startRecording()">Start Recording</button>
+        <button onclick="stopRecording()">Stop Recording</button>
+        <button onclick="samplebutton()">sample button</button>
+    </div>
+</body>
+</html>

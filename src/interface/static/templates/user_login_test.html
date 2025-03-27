@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log In</title>
+</head>
+<body>
+    <style>
+         body {
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #007BFF;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            padding-left: 20px;
+        }
+        nav {
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            font-size: 30px;
+        }
+        .navbar {
+            display: flex;
+            justify-content: left;
+            align-items: left;
+            padding: 10px;
+            background-color: transparent;
+            border-radius: 20px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            font-size: 24px;
+            padding: 15px 25px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            margin: 0;
+            color: white;
+            background-color: rgba(255, 255, 255, 0);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .nav-links a:hover {
+            background-color: #f0f0f0;
+            color: black;
+            box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
+        }
+        .container {
+            padding: 20px;
+        }
+        video, img {
+            border: 2px solid #333;
+            width: 100%;
+            height: auto;
+        }
+        form {
+            margin-top: 10px;
+        }
+        button {
+            padding: 20px 20px;
+            background-color: #c9b946;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        .section-divider {
+            border: none;
+            height: 2px;
+            margin: 30px 0;
+            background-color: #ddd;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .header-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            padding: 10px;
+        }
+        .logo-container img {
+            height: 60px;
+            width: auto;
+        }
+        
+
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin: 20px auto;
+            padding: 20px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            width: 50%;
+            background-color: #f9f9f9;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+        .login-form label {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .login-form input {
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .login-form input:focus {
+            border-color: green;
+            box-shadow: 0 0 5px green;
+            outline: none;
+        }
+        .login-button {
+            padding: 8px 12px;
+            font-size: 14px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            cursor: pointer;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .login-button:hover {
+            background-color: #0056b3;
+        }
+
+    </style>
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="logo.png" alt="Testing" class="logo">
+            </div>
+            <div><h1>Shimano Singapore</h1></div>
+            <div><h3 style="text-align: left; padding: 5px;"> ADS Fault Monitoring Dashboard </h3></div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="login-container">
+            <h2>Login</h2>
+            <form class="login-form">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit" class="login-button">Login</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

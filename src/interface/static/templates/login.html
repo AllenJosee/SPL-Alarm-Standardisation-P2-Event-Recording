@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='images/shimano_logo.jpg') }}" alt="Testing" class="logo">
+            </div>
+            <div><h1>Shimano Singapore</h1></div>
+            <div><h3 style="text-align: left; padding: 5px;"> ADS Fault Monitoring Dashboard </h3></div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="login-container">
+            <h2>Login</h2>
+            {% if error %}
+                <p class="error-message">{{ error }}</p>
+            {% endif %}
+            <form class="login-form" method="POST">
+                <label for="username">Username</label>
+                <input type="text" name="username" placeholder="Username" id="username" required>
+                <label for="password">Password</label>
+                <input type="password" name="password" placeholder="Password" id="password" required>
+                <button type="submit" class="login-button">Login</button>
+            </form>
+    </div>
+    
+</body>
+</html>
