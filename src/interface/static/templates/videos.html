@@ -29,11 +29,16 @@
     <div class="container">
         <div class="center-container">
             <form method="POST" action="/update_info">
-                <button type="submit" class="control-button green">Update Info</button>
+                <button type="submit" class="action-button update-button">Update Info</button>
             </form>
+            <input type="text" id="searchInput" placeholder="Search for videos..." class="search-field">
+            <button onclick="searchTable()" class="action-button search-button">Search</button>
+            <button onclick="resetTable()" class="action-button cancel-button">Cancel</button>
         </div>
         
-
+        <div class="search-container">
+            
+        </div>
         <h2>Video List</h2>
         {% if videos %}
         <table class="styled-table">
@@ -44,7 +49,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="videoTableBody">
                 {% for video in videos %}
                 <tr>
                     <td>{{ video.filename }}</td>
@@ -62,11 +67,11 @@
         <p class="no-videos">No videos recorded yet.</p>
         {% endif %}
 
-        <div class="playback-section">
+        <!-- <div class="playback-section">
             <h3>Playback</h3>
             <video id="video-player" controls>
                 <source id="video-source" src="" type="video/mp4"></video>
-        </div>
+        </div> --> 
     
         <script>
             function playVideo(filename) {
@@ -75,6 +80,30 @@
                 videoSource.src = `/src/recordings/${filename}`;
                 videoPlayer.load();
                 videoPlayer.scrollIntoView({ behavior: "smooth" }); 
+            }
+
+            function searchTable(){
+                var input = document.getElementById('searchInput').value.toLowerCase();
+                var tableBody = document.getElementById('videoTableBody');
+                var rows = tableBody.getElementsByTagName('tr');
+                for (var i = 0; i < rows.length; i++) {
+                    var cells = rows[i].getElementsByTagName('td');
+                    var filename = cells[0].textContent.toLowerCase();
+                    if (filename.includes(input)) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            }
+
+            function resetTable(){
+                var tableBody = document.getElementById('videoTableBody');
+                var rows = tableBody.getElementsByTagName('tr');
+                for (var i = 0; i < rows.length; i++) {
+                    rows[i].style.display = '';
+                }
+                document.getElementById('searchInput').value = '';
             }
         </script>
     </div>

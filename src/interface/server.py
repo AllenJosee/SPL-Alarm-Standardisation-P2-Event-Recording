@@ -141,10 +141,8 @@ def logout():
 def videos():
     # Load videos dynamically from folders
     videos_list = load_videos_from_folder(RECORDINGS_DIR)
-    incident_videos = load_incident_videos()
     return render_template(
-        "videos.html", videos=videos_list, incident_videos=incident_videos
-    )
+        "videos.html", videos=videos_list)
 
 @app.route("/incident_videos")
 @login_required

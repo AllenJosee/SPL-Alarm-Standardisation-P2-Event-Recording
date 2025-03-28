@@ -31,8 +31,11 @@
     <div class="container">
         <div class="center-container">
             <form method="POST" action="/update_incident_info">
-                <button type="submit" class="control-button green">Update Info</button>
+                <button type="submit" class="action-button update-button">Update Info</button>
             </form>
+            <input type="text" id="searchInput" placeholder="Search for videos..." class="search-field">
+            <button onclick="searchTable()" class="action-button search-button">Search</button>
+            <button onclick="resetTable()" class="action-button cancel-button">Cancel</button>
         </div>
        
             <h2>Incident Videos</h2>
@@ -44,7 +47,7 @@
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="videoTableBody">
                     {% for video in incident_videos %}
                     <tr>
                         <td>{{ video.filename }}</td>
@@ -57,11 +60,11 @@
                 {% endfor %}
                 </tbody>
                 </table>
-                <div class="playback-section">
+                <!-- <div class="playback-section">
                     <h3>Playback</h3>
                     <video id="video-player" controls>
                         <source id="video-source" src="" type="video/mp4"></video>
-                </div>
+                </div> -->
                 <script>
                     function playVideo(filename) {
                         const videoSource = document.getElementById("video-source");
@@ -69,6 +72,29 @@
                         videoSource.src = `/src/recordings/${filename}`;
                         videoPlayer.load();
                         videoPlayer.scrollIntoView({ behavior: "smooth" }); 
+                    }
+                    function searchTable(){
+                        var input = document.getElementById('searchInput').value.toLowerCase();
+                        var tableBody = document.getElementById('videoTableBody');
+                        var rows = tableBody.getElementsByTagName('tr');
+                        for (var i = 0; i < rows.length; i++) {
+                            var cells = rows[i].getElementsByTagName('td');
+                            var filename = cells[0].textContent.toLowerCase();
+                            if (filename.includes(input)) {
+                                rows[i].style.display = '';
+                            } else {
+                                rows[i].style.display = 'none';
+                            }
+                        }
+                    }
+
+                    function resetTable(){
+                        var tableBody = document.getElementById('videoTableBody');
+                        var rows = tableBody.getElementsByTagName('tr');
+                        for (var i = 0; i < rows.length; i++) {
+                            rows[i].style.display = '';
+                        }
+                        document.getElementById('searchInput').value = '';
                     }
                 </script>
                 </tbody>
