@@ -51,7 +51,7 @@ video_duration = settings["video_duration"]
 def load_videos_from_folder(folder):
     videos = []
     for file in os.listdir(folder):
-        if file.endswith(".mp4"):
+        if file.endswith(".mp4"): #    if file.endswith(".avi"):
             filepath = os.path.join(folder, file)
             videos.append(
                 {"filename": file, "timestamp": time.ctime(os.path.getctime(filepath))}
@@ -66,7 +66,7 @@ def load_incident_videos():
         folder_path = os.path.join(INCIDENTS_DIR, folder)
         if os.path.isdir(folder_path):
             for file in os.listdir(folder_path):
-                if file.endswith(".avi"):
+                if file.endswith(".mp4"): #if file.endswith(".avi"):
                     file_path = os.path.join(folder_path, file)
                     incident_videos.append({"filename": file, "path": file_path})
     return incident_videos
@@ -213,7 +213,7 @@ def simulate_incident():
         shutil.copy(os.path.join(RECORDINGS_DIR, video["filename"]), incident_folder)
         if len(os.listdir(incident_folder)) >= 6:  # Limit to 6 videos
             break
-    return redirect(url_for("videos"))
+    return redirect(url_for("incident_videos"))
 
 
 @app.route("/video_feed")
@@ -256,7 +256,7 @@ def stop_recording():
 
 def record_video():
     global recording
-    
+
     # Load settings from JSON file
     with open(SETTINGS_FILE, "r") as f:
         settings = json.load(f)
@@ -266,17 +266,21 @@ def record_video():
         video_duration = settings["video_duration"]
         max_videos = settings["max_videos"]
 
-        filename = time.strftime("%Y%m%d-%H%M%S") + ".mp4"
+        filename = time.strftime("%Y%m%d-%H%M%S") + ".mp4" #filename = time.strftime("%Y%m%d-%H%M%S") + ".avi"
         filepath = os.path.join(RECORDINGS_DIR, filename)
 
-        fourcc = cv2.VideoWriter_fourcc(*"MP4V")
-        out = cv2.VideoWriter(filepath, fourcc, 20.0, (640, 480))
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v") #fourcc = cv2.VideoWriter_fourcc(*"XVID")
+        actual_fps = 15
+        out = cv2.VideoWriter(filepath, fourcc, actual_fps, (640, 480))
         start_time = time.time()
 
-        while recording and (time.time() - start_time) < video_duration:
+        frame_count = 0
+        total_frames = int(actual_fps * video_duration)
+        while recording and frame_count < total_frames:
             ret, frame = camera.read()
             if ret:
                 out.write(frame)
+                frame_count += 1
             else:
                 break
 
