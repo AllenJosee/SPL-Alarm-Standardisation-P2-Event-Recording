@@ -89,7 +89,8 @@
                 for (var i = 0; i < rows.length; i++) {
                     var cells = rows[i].getElementsByTagName('td');
                     var filename = cells[0].textContent.toLowerCase();
-                    if (filename.includes(input)) {
+                    var timestamp = cells[1].textContent.toLowerCase();
+                    if (filename.includes(input) || timestamp.includes(input)) {
                         rows[i].style.display = '';
                     } else {
                         rows[i].style.display = 'none';
