@@ -1,5 +1,9 @@
 
 body {
+    /* background-image: url("../images/bg1.jpg");
+    background-size: cover; 
+    background-repeat: no-repeat; 
+    background-position: center center; */
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -11,9 +15,10 @@ header {
     background-color: #007BFF;
     color: white;
     padding: 10px;
-    text-align: left;
+    text-align: center;
     padding-left: 20px;
 }
+
 nav {
     background-color: #f4f4f4;
     display: flex;
@@ -24,17 +29,20 @@ nav {
 
 .navbar {
     display: flex;
-    justify-content: left;
-    align-items: left;
+    justify-content: space-between;
+    align-items: center;
     padding: 10px;
     background-color: transparent;
     border-radius: 20px;
+    height: 60px;
 }
 
 .nav-links {
     display: flex;
     gap: 20px;
 }
+
+
 
 .nav-links a {
     text-decoration: none;
@@ -54,11 +62,17 @@ nav {
     color: black;
     box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
 }
+
+.user_info{
+    text-align: right;
+    align-items: right;
+    height: 100%;
+    padding-right: 15px;
+    padding-left: 800px;
+}
     
 
-.container {
-    padding: 20px;
-}
+
 video, img {
     border: 2px solid #333;
     width: 640px;

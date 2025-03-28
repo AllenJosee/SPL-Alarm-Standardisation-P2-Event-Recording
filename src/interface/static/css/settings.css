@@ -55,7 +55,14 @@ nav {
     box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
 }
     
-
+.user_info{
+    text-align: right;
+    align-items: right;
+    height: 100%;
+    padding-right: 15px;
+    padding-left: 800px;
+}
+   
 .container {
     padding: 20px;
 }
