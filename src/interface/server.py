@@ -1,4 +1,5 @@
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify,session
+from flask import send_from_directory
 import os
 import cv2
 import json
@@ -70,6 +71,11 @@ def load_incident_videos():
                     file_path = os.path.join(folder_path, file)
                     incident_videos.append({"filename": file, "path": file_path})
     return incident_videos
+
+#Video Playback Testing
+@app.route('/videos/<filename>')
+def serve_video(filename):
+    return send_from_directory('static/videos', filename, conditional=True)
 
 #Load users
 def validate_user(username, password):

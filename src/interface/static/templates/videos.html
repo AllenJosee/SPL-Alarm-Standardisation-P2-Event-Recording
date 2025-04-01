@@ -55,9 +55,8 @@
                     <td>{{ video.filename }}</td>
                     <td>{{ video.timestamp }}</td>
                     <td class="actions">
-                        <button onclick="playVideo('{{video.filename}}')" class="action-button play-button">Play</button>
-                        <a href="/download/{{ video.filename }}" class="action-button download-button" target="_blank">Download</a>
-                       <!--<a href="/static/recordings/{{ video.filename }}" class="action-button view-button" target="_blank">View</a> --> 
+                        <button onclick="playVideo('{{ video.filename }}')" class="action-button play-button">Play</button>
+                        <a href="{{ url_for('static', filename='videos/' ~ video.filename) }}" class="action-button download-button" target="_blank">Download</a>                       <!--<a href="/static/recordings/{{ video.filename }}" class="action-button view-button" target="_blank">View</a> --> 
                     </td>
                 </tr>
                 {% endfor %}
@@ -67,18 +66,19 @@
         <p class="no-videos">No videos recorded yet.</p>
         {% endif %}
 
-        <!-- <div class="playback-section">
+        <div class="playback-section">
             <h3>Playback</h3>
             <video id="video-player" controls>
                 <source id="video-source" src="" type="video/mp4"></video>
-        </div> --> 
+        </div> 
     
         <script>
             function playVideo(filename) {
                 const videoSource = document.getElementById("video-source");
                 const videoPlayer = document.getElementById("video-player");
-                videoSource.src = `/src/recordings/${filename}`;
+                videoSource.src = `/videos/${filename}`;                
                 videoPlayer.load();
+                videoPlayer.play();
                 videoPlayer.scrollIntoView({ behavior: "smooth" }); 
             }
 
