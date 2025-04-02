@@ -240,5 +240,24 @@ button:hover {
     background-color: #0056b3;
 }
 
+.status-circle {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    position: absolute;
+    right: 15px;
+    top: 300px;
+    background-color: grey;
+    
+}
 
+.status-circle.recording {
+    background-color: orange;
+    display: block;
+}
+
+.status-circle.incident {
+    background-color: red;
+    display: block;
+}
 

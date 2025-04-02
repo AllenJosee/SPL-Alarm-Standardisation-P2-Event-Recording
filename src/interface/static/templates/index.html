@@ -36,24 +36,25 @@
     </header>
     
     
-
+    
     <div class="container">
         <h2 style="text-align: center; padding: 10px;" >Camera 1</h2>
             <div class="stream-container">
                 <div class="live-stream">
                     <img src="/video_feed" alt="Live Video Stream">
+                    <div class="status-circle" id="status-circle"></div>
                 </div>
             </div>
     <div class="section-divider"></div> 
         <h2 style="text-align: center; padding-top: 15px;">Controls</h2>
             <div class="control-buttons">
-                <form method="POST" action="/start_recording">
+                <form method="POST" action="/start_recording" onsubmit="showRecordingStatus()">
                     <button type="submit" class="control-button green">Start Recording</button>
                 </form>
-                <form method="POST" action="/stop_recording">
+                <form method="POST" action="/stop_recording" onsubmit="hideStatus()">
                     <button type="submit" class="control-button orange">Stop Recording</button>
                 </form>
-                <form method="POST" action="/simulate_incident">
+                <form method="POST" action="/simulate_incident" onsubmit="showIncidentStatus()">
                     <button type="submit" class="control-button red">Simulate Incident</button>
                 </form>
             </div>
@@ -71,6 +72,28 @@
                     <button type="submit" class="submit-button">Update Settings</button>
                 </form>
             </div>-->
+
+            <script>
+                function showRecordingStatus() {
+                const statusCircle = document.getElementById('status-circle');
+                statusCircle.className = 'status-circle recording';
+                }
+                
+                function hideStatus() {
+                    const statusCircle = document.getElementById('status-circle');
+                    statusCircle.className = 'status-circle';
+                }
+                
+                function showIncidentStatus() {
+                    const statusCircle = document.getElementById('status-circle');
+                    statusCircle.className = 'status-circle incident';
+                    console.log('Incident status shown');
+                    setTimeout(() => {
+                        statusCircle.className = 'status-circle'; // Revert to grey after 1 minute
+                        console.log('Incident status reverted to grey');
+                    }, 60000); // Hide after 1 minute
+                }
+            </script>
     </div>
 </body>
 </html>
