@@ -217,8 +217,8 @@ def simulate_incident():
         shutil.copy(os.path.join(RECORDINGS_DIR, video["filename"]), incident_folder)
         if len(os.listdir(incident_folder)) >= 6:  # Limit to 6 videos
             break
-    return redirect(url_for("incident_videos"))
-
+    #return redirect(url_for("incident_videos")
+    return '', 204
 
 @app.route("/video_feed")
 def video_feed():

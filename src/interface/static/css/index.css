@@ -260,3 +260,11 @@ button:hover {
     background-color: red;
     display: block;
 }
+
+.status-message {
+    font-size: 16px;
+    color: black;
+    position: absolute;
+    right: 50px;
+    top: 300px;
+}

@@ -43,6 +43,7 @@
                 <div class="live-stream">
                     <img src="/video_feed" alt="Live Video Stream">
                     <div class="status-circle" id="status-circle"></div>
+                    <div id="status-message" class="status-message"></div>
                 </div>
             </div>
     <div class="section-divider"></div> 
@@ -60,38 +61,29 @@
             </div>
             <div class="section-divider"></div>
 
-            <!--<h2 style="text-align: center; padding: 10px;">Settings</h2>
-            <div class="settings-container">
-                <form method="POST" action="/update_settings" class="settings-form">
-                    <label for="max_videos">Max Videos:</label>
-                    <input type="number" name="max_videos" id="max_videos" value="{{ max_videos }}">
-                    
-                    <label for="video_duration">Video Duration (seconds):</label>
-                    <input type="number" name="video_duration" id="video_duration" value="{{ video_duration }}">
-                    
-                    <button type="submit" class="submit-button">Update Settings</button>
-                </form>
-            </div>-->
+            
 
             <script>
+                let incidentCount = 0;
+
                 function showRecordingStatus() {
                 const statusCircle = document.getElementById('status-circle');
                 statusCircle.className = 'status-circle recording';
+                document.getElementById('status-message').innerText = 'Recording...';
                 }
                 
                 function hideStatus() {
                     const statusCircle = document.getElementById('status-circle');
                     statusCircle.className = 'status-circle';
+                    document.getElementById('status-message').innerText = 'Recording stopped.';
                 }
                 
                 function showIncidentStatus() {
                     const statusCircle = document.getElementById('status-circle');
                     statusCircle.className = 'status-circle incident';
+                    incidentCount++;
+                    document.getElementById('status-message').innerText = `Incident simulated. Count: ${incidentCount}`;
                     console.log('Incident status shown');
-                    setTimeout(() => {
-                        statusCircle.className = 'status-circle'; // Revert to grey after 1 minute
-                        console.log('Incident status reverted to grey');
-                    }, 60000); // Hide after 1 minute
                 }
             </script>
     </div>
