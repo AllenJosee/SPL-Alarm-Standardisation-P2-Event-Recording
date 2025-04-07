@@ -81,12 +81,22 @@ button:hover {
 .header-container {
     display: flex;
     align-items: center;
-    gap: 30px;
+    justify-content: space-between;
     padding: 10px;
 }
+
 .logo-container img {
     height: 60px;
     width: auto;
+}
+
+.header-text {
+    flex-grow: 1;
+    padding-left: 20px;
+}
+
+.header-text h1, .header-text h3 {
+    margin: 0;
 }
 
 

@@ -110,7 +110,7 @@ class Camera:
 
 # Initialize Flask app
 app = Flask(__name__, template_folder='static/templates')
-app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a4'
+app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
 # Initialize a single camera object
 camera = Camera("src/recordings", "src/incidents", "src/settings.json")
@@ -149,7 +149,7 @@ def login_required(f):
 @app.route("/", methods=['GET'])
 def home():
     if 'authenticated' in session:
-        return redirect(url_for('index'))
+        return redirect(url_for('camera_list'))
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -162,7 +162,7 @@ def login():
         if validate_user(username, password):
             session['authenticated'] = True
             session['username'] = username
-            return redirect(url_for('index'))
+            return redirect(url_for('camera_list'))
         error = 'Invalid credentials. Please try again.'
     return render_template('login.html', error = error)
 
@@ -171,7 +171,14 @@ def login():
 def index():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
-    return render_template('index.html', username=session['username'])
+    return render_template('index.html', username=session['username']) # camera list before the index.
+
+@app.route('/camera_list')
+@login_required
+def camera_list():
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    return render_template('camera_list.html', username=session['username'])
 
 
 @app.route('/logout', methods=['POST'])
