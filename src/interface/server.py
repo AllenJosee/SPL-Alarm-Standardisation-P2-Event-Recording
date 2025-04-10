@@ -13,6 +13,7 @@ from functools import wraps
 
 class Camera:
     def __init__(self, recordings_dir, incidents_dir, settings_file):
+        #self.id = id
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
@@ -39,9 +40,9 @@ class Camera:
         for file in os.listdir(folder):
             if file.endswith(".mp4"):
                 filepath = os.path.join(folder, file)
-                videos.append({"filename": file, "timestamp": time.ctime(os.path.getctime(filepath))})        
-                return videos
-            
+                videos.append({"filename": file, "timestamp": time.ctime(os.path.getctime(filepath))})
+        return videos
+
     def load_incident_videos(self):
         incident_videos = []
         for folder in os.listdir(self.incidents_dir):
@@ -52,6 +53,7 @@ class Camera:
                         file_path = os.path.join(folder_path, file)
                         incident_videos.append({"filename": file, "path": file_path})
         return incident_videos
+
     
     def update_settings(self, max_videos, video_duration):
         self.settings["max_videos"] = max_videos
@@ -180,6 +182,12 @@ def camera_list():
         return redirect(url_for('login'))
     return render_template('camera_list.html', username=session['username'])
 
+@app.route('/feed_view')
+@login_required
+def feed_view():
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    return render_template('feed_view.html', username=session['username'])
 
 @app.route('/logout', methods=['POST'])
 def logout():
