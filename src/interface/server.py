@@ -225,26 +225,34 @@ def index(camera_id):
 def camera_list():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
-    return render_template('camera_list.html', username=session['username'])
+    return render_template('camera_list.html', username=session['username'], cameras = cameras)
 
+#Add new camera
 @app.route('/add_camera', methods=['GET', 'POST'])
 @login_required
 def add_camera():
     if request.method == 'POST':
         camera_id = request.form.get('camera_id')
-        
         new_camera = Camera(
             f"src/recordings/camera{camera_id}",
             f"src/incidents/camera{camera_id}",
             f"src/settings_camera{camera_id}.json"
         )
-        
         cameras[camera_id] = new_camera
         save_cameras_to_json()  # Save the updated cameras to JSON
-        
         return redirect(url_for('camera_list'))
-    
     return render_template('add_camera.html')
+
+#Delete camera
+@app.route('/delete_camera/<camera_id>', methods=['POST'])
+@login_required
+def delete_camera(camera_id):
+    if camera_id in cameras:
+        del cameras[camera_id] 
+        save_cameras_to_json() 
+        return redirect(url_for('camera_list'))  
+    return "Camera not found", 404  
+
 
 @app.route('/feed_view')
 @login_required

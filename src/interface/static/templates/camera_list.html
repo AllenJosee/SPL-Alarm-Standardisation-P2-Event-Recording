@@ -26,40 +26,23 @@
     <h2 style="text-align: center; padding: 10px;">Camera Management</h2>
     <div>
         <div class="camera-actions">
-            <a href="{{ url_for('add_camera') }}" class="control-button green">Add New Camera</a>            <a href="{{ url_for('feed_view') }} " class="control-button blue">Feed View</a>
+            <a href="{{ url_for('add_camera') }}" class="control-button green">Add New Camera</a><a href="{{ url_for('feed_view') }} " class="control-button blue">Feed View</a>
     </div>
     <div class="camera-list">
+        {% for camera_id, camera in cameras.items() %}
         <div class="camera-item">
             <div class="camera-info">
-                <h3>Camera 1</h3>
-                <p>Description of Camera 1</p>
+                <h3>Camera {{ camera_id }}</h3>
+                <p>{{ camera.description }}</p>            
             </div>
             <div class="camera-actions">
-                <button class="control-button red">Delete</button>
-                <a href="{{ url_for('index', camera_id='1') }}" class="control-button blue">Details</a> <!-- Updated -->
+                <form method="POST" action="{{ url_for('delete_camera', camera_id=camera_id) }}">
+                    <input type="submit" value="Delete" class="control-button red">
+                </form>                 
+                <a href="{{ url_for('index', camera_id=camera_id) }}" class="control-button blue">Details</a>
             </div>
         </div>
-        <div class="camera-item">
-            <div class="camera-info">
-                <h3>Camera 2</h3>
-                <p>Description of Camera 2</p>
-            </div>
-            <div class="camera-actions">
-                <button class="control-button red">Delete</button>
-                <a href="{{ url_for('index', camera_id='2') }}" class="control-button blue">Details</a> <!-- Updated -->
-            </div>
-        </div>
-        <div class="camera-item">
-            <div class="camera-info">
-                <h3>Camera 3</h3>
-                <p>Description of Camera  </p>
-            </div>
-            <div class="camera-actions">
-                <button class="control-button red">Delete</button>
-                <a href="/" class="control-button blue">Details</a>
-            </div>
-        </div>
-        <!-- Add more camera items as needed -->
+        {% endfor %}
     </div>
 </div>
 <!-- <button class="view-all-button">Feed View</button> -->
