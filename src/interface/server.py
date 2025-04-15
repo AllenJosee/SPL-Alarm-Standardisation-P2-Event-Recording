@@ -14,32 +14,32 @@ settings_file = "src/settings.json"
 
 
 class Camera:
-    #device index
-    def __init__(self, recordings_dir, incidents_dir, settings_file, device_index=0):
+    #device index=0 -> webcam
+    def __init__(self, recordings_dir, incidents_dir, settings_file, description="", device_index=0):
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
+        self.description = description  # Add description attribute
         self.camera = cv2.VideoCapture(device_index)
         if not self.camera.isOpened():
             raise Exception("Could not open video device")        
         self.recording = False
         os.makedirs(recordings_dir, exist_ok=True)
         os.makedirs(incidents_dir, exist_ok=True)
-        os.makedirs
         self.load_settings()
 
     def to_dict(self):
-        return{
+        return {
             "recordings_dir": self.recordings_dir,
             "incidents_dir": self.incidents_dir,
             "settings_file": self.settings_file,
+            "description": self.description  # Include description in the dictionary
         }
     
     @staticmethod
     def from_dict(data):
-        return Camera(data["recordings_dir"], data["incidents_dir"], data["settings_file"])
+        return Camera(data["recordings_dir"], data["incidents_dir"], data["settings_file"], data.get("description", ""))
 
-    
     def load_settings(self):
         if not os.path.exists(self.settings_file):
             default_settings = {
@@ -233,10 +233,12 @@ def camera_list():
 def add_camera():
     if request.method == 'POST':
         camera_id = request.form.get('camera_id')
+        description = request.form.get('description', '').strip()  # Get the description from the form
         new_camera = Camera(
             f"src/recordings/camera{camera_id}",
             f"src/incidents/camera{camera_id}",
-            f"src/settings_camera{camera_id}.json"
+            f"src/settings_camera{camera_id}.json",
+            description  # Pass the description to the Camera constructor
         )
         cameras[camera_id] = new_camera
         save_cameras_to_json()  # Save the updated cameras to JSON

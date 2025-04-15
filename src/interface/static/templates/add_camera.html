@@ -4,14 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add New Camera</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/add_camera.css') }}">
 </head>
 <body>
-    <h2>Add New Camera</h2>
-    <form method="POST">
-        <label for="camera_id">Camera ID:</label>
-        <input type="text" id="camera_id" name="camera_id" required>
-        <button type="submit">Add Camera</button>
-    </form>
-    <a href="{{ url_for('camera_list') }}">Cancel</a>
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='images/shimano_logo.jpg') }}" alt="Testing" class="logo">
+            </div>
+            <div class="header-text">
+                <h1>Shimano Singapore</h1>
+                <h3>ADS Fault Monitoring Dashboard</h3>
+            </div>
+        </div>
+    </header>
+      <div class="container">
+        <div class="login-container">
+            <h2>Add New Camera</h2>
+            {% if error %}
+                <p class="error-message">{{ error }}</p>
+            {% endif %}
+            <form class="login-form" method="POST">
+                <label for="camera_id">Camera ID</label>
+                <input type="text" name="camera_id" placeholder="Camera ID" id="camera_id" required>
+                <label for="description">Description (optional)</label>
+                <input type="text" name="description" placeholder="Description" id="description">
+                <button type="submit" class="login-button">Add Camera</button>
+                <a href="{{ url_for('camera_list') }}" class="login-button">Cancel</a>  
+            </form>
+        </div>
+    </div>
 </body>
 </html>
