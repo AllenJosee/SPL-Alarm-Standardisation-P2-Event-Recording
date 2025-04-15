@@ -7,23 +7,39 @@ import time
 import shutil
 from functools import wraps
 
-#recordings_dir = "src/recordings"
-#incidents_dir = "src/incidents"
-#settings_file = "src/settings.json"
+recordings_dir = "src/recordings"
+incidents_dir = "src/incidents"
+settings_file = "src/settings.json"
+
+
 
 class Camera:
-    def __init__(self, recordings_dir, incidents_dir, settings_file):
-        #self.id = id
+    #device index
+    def __init__(self, recordings_dir, incidents_dir, settings_file, device_index=0):
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
-        self.camera = cv2.VideoCapture(0)
+        self.camera = cv2.VideoCapture(device_index)
+        if not self.camera.isOpened():
+            raise Exception("Could not open video device")        
         self.recording = False
-
         os.makedirs(recordings_dir, exist_ok=True)
+        os.makedirs(incidents_dir, exist_ok=True)
         os.makedirs
         self.load_settings()
 
+    def to_dict(self):
+        return{
+            "recordings_dir": self.recordings_dir,
+            "incidents_dir": self.incidents_dir,
+            "settings_file": self.settings_file,
+        }
+    
+    @staticmethod
+    def from_dict(data):
+        return Camera(data["recordings_dir"], data["incidents_dir"], data["settings_file"])
+
+    
     def load_settings(self):
         if not os.path.exists(self.settings_file):
             default_settings = {
@@ -94,6 +110,8 @@ class Camera:
     #Video Feed
     def generate_video_feed(self):
         while True:
+            if not self.camera.isOpened():
+                break 
             ret, frame = self.camera.read()
             if ret:
                 # Add a red border if recording
@@ -115,7 +133,32 @@ app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
 # Initialize a single camera object
-camera = Camera("src/recordings", "src/incidents", "src/settings.json")
+
+#camera1 = Camera("src/recordings/camera1", "src/incidents/camera1", "src/settings_camera1.json")
+#camera2 = Camera("src/recordings/camera2", "src/incidents/camera2", "src/settings_camera2.json")
+#cameras = {
+    #"1": Camera("src/recordings/camera1", "src/incidents/camera1", "src/settings_camera1.json"),
+    #"2": Camera("src/recordings/camera2", "src/incidents/camera2", "src/settings_camera2.json"),
+#}
+
+
+def save_cameras_to_json():
+        camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
+        print("Saving cameras to JSON:", camera_data)  # Debugging line
+        with open('cameras.json', 'w') as f:
+            json.dump(camera_data, f)
+        print("Cameras saved successfully.")
+    
+def load_cameras_from_json():
+    global cameras
+    if os.path.exists('cameras.json'):
+        with open('cameras.json', 'r') as f:
+            camera_data = json.load(f)
+            cameras = {camera_id: Camera.from_dict(data) for camera_id, data in camera_data.items()}
+
+
+cameras = {}
+load_cameras_from_json()
 
 #Load users
 def validate_user(username, password):
@@ -137,7 +180,7 @@ def validate_user(username, password):
     except Exception as e:
         print(f"Auth Error: {str(e)}")
         return False
-    
+
 
 #Login required decorator
 def login_required(f):
@@ -168,12 +211,14 @@ def login():
         error = 'Invalid credentials. Please try again.'
     return render_template('login.html', error = error)
 
-@app.route('/index')
+@app.route('/index/<camera_id>')
 @login_required
-def index():
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
-    return render_template('index.html', username=session['username']) # camera list before the index.
+def index(camera_id):
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    if camera is None:
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+
+    return render_template('index.html', username=session['username'], camera_id=camera_id)  # Pass camera_id to the template
 
 @app.route('/camera_list')
 @login_required
@@ -181,6 +226,25 @@ def camera_list():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
     return render_template('camera_list.html', username=session['username'])
+
+@app.route('/add_camera', methods=['GET', 'POST'])
+@login_required
+def add_camera():
+    if request.method == 'POST':
+        camera_id = request.form.get('camera_id')
+        
+        new_camera = Camera(
+            f"src/recordings/camera{camera_id}",
+            f"src/incidents/camera{camera_id}",
+            f"src/settings_camera{camera_id}.json"
+        )
+        
+        cameras[camera_id] = new_camera
+        save_cameras_to_json()  # Save the updated cameras to JSON
+        
+        return redirect(url_for('camera_list'))
+    
+    return render_template('add_camera.html')
 
 @app.route('/feed_view')
 @login_required
@@ -194,67 +258,99 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+
 # Flask routes and functions
-@app.route('/videos')
+@app.route('/videos/<camera_id>')
 @login_required
-def videos():
+def videos(camera_id):
+    camera = cameras.get(camera_id)
+    if camera is None:
+        return "Camera not found", 404
     videos_list = camera.load_videos_from_folder(camera.recordings_dir)
-    return render_template("videos.html", videos=videos_list)
+    return render_template("videos.html", videos=videos_list, camera_id=camera_id)
 
-@app.route('/incident_videos')
+@app.route('/incident_videos/<camera_id>')
 @login_required
-def incident_videos():
+def incident_videos(camera_id):
+    camera = cameras.get(camera_id)
+    if camera is None:
+        return "Camera not found", 404
     incident_videos = camera.load_incident_videos()
-    return render_template("incident_vid.html", incident_videos=incident_videos)
+    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id)
 
-@app.route('/settings_page')
+@app.route('/settings_page/<camera_id>')
 @login_required
-def settings_page():
-    settings = camera.settings
-    return render_template("settings.html", settings=settings)
+def settings_page(camera_id):
+    camera = cameras.get(camera_id)
+    if camera is None:
+        return "Camera not found", 404
 
-@app.route('/update_settings', methods=['POST'])
+    # Assuming camera has attributes max_videos and video_duration
+    return render_template('settings.html', camera_id=camera_id)
+
+@app.route('/update_settings/<camera_id>', methods=['POST'])
 @login_required
-def update_settings():
+def update_settings(camera_id):
+    camera = cameras.get(camera_id)
+    if camera is None:
+        return "Camera not found", 404
     max_videos = request.form.get("max_videos", type=int)
     video_duration = request.form.get("video_duration", type=int)
     camera.update_settings(max_videos, video_duration)
-    return redirect(url_for("index"))
+    return redirect(url_for("index", camera_id=camera_id)) 
 
-@app.route("/update_info", methods=["POST"])
-def update_info():
+@app.route("/update_info/<camera_id>", methods=["POST"])
+def update_info(camera_id):
     # Reload video information (dynamically triggered)
-    return redirect(url_for("videos"))
+    return redirect(url_for("videos", camera_id=camera_id))
 
-@app.route("/update_incident_info", methods=["POST"])
-def update_inicident_info():
+@app.route("/update_incident_info/<camera_id>", methods=["POST"])
+def update_incident_info(camera_id):
     # Reload video information (dynamically triggered)
-    return redirect(url_for("incident_videos"))
+    return redirect(url_for("incident_videos", camera_id=camera_id))
 
-@app.route('/start_recording', methods=['POST'])
+
+@app.route('/start_recording/<camera_id>', methods=['POST'])
 @login_required
-def start_recording():
+def start_recording(camera_id):
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    if camera is None:
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+
     camera.recording = True
     Thread(target=camera.record_video).start()
     return "", 204
 
-@app.route('/stop_recording', methods=['POST'])
+@app.route('/stop_recording/<camera_id>', methods=['POST'])
 @login_required
-def stop_recording():
+def stop_recording(camera_id):
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    if camera is None:
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+
     camera.recording = False
     return "", 204
 
-@app.route('/simulate_incident', methods=['POST'])
+@app.route('/simulate_incident/<camera_id>', methods=['POST'])
 @login_required
-def simulate_incident():
+def simulate_incident(camera_id):
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    if camera is None:
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+
     camera.simulate_incident()
     return '', 204
 
-@app.route("/video_feed")
-def video_feed():
+@app.route("/video_feed/<camera_id>")
+def video_feed(camera_id):
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    if camera is None:
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+
     return Response(camera.generate_video_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 if __name__ == "__main__":
+    load_cameras_from_json
     app.run(debug=True)
         

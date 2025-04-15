@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Camera</title>
+</head>
+<body>
+    <h2>Add New Camera</h2>
+    <form method="POST">
+        <label for="camera_id">Camera ID:</label>
+        <input type="text" id="camera_id" name="camera_id" required>
+        <button type="submit">Add Camera</button>
+    </form>
+    <a href="{{ url_for('camera_list') }}">Cancel</a>
+</body>
+</html>

@@ -26,8 +26,7 @@
     <h2 style="text-align: center; padding: 10px;">Camera Management</h2>
     <div>
         <div class="camera-actions">
-            <button class="control-button green">Add New Camera</button>
-            <a href="{{ url_for('feed_view') }} " class="control-button blue">Feed View</a>
+            <a href="{{ url_for('add_camera') }}" class="control-button green">Add New Camera</a>            <a href="{{ url_for('feed_view') }} " class="control-button blue">Feed View</a>
     </div>
     <div class="camera-list">
         <div class="camera-item">
@@ -37,7 +36,7 @@
             </div>
             <div class="camera-actions">
                 <button class="control-button red">Delete</button>
-                <a href="/index" class="control-button blue">Details</a>
+                <a href="{{ url_for('index', camera_id='1') }}" class="control-button blue">Details</a> <!-- Updated -->
             </div>
         </div>
         <div class="camera-item">
@@ -47,13 +46,13 @@
             </div>
             <div class="camera-actions">
                 <button class="control-button red">Delete</button>
-                <a href="/" class="control-button blue">Details</a>
+                <a href="{{ url_for('index', camera_id='2') }}" class="control-button blue">Details</a> <!-- Updated -->
             </div>
         </div>
         <div class="camera-item">
             <div class="camera-info">
                 <h3>Camera 3</h3>
-                <p>Description of Camera 3</p>
+                <p>Description of Camera  </p>
             </div>
             <div class="camera-actions">
                 <button class="control-button red">Delete</button>

@@ -20,18 +20,17 @@
         </div>
         <nav class="navbar">
             <div class="nav-links">
-                <a href="/index">Home</a>
-                <a href="/videos">Recorded Videos</a>
-                <a href="/incident_videos">Incident Video</a>
-                <a href="/settings_page">Settings</a>
-                <a href="/camera_list">All Cameras</a>
+                <a href="{{ url_for('index', camera_id=camera_id) }}">Home</a>
+                <a href="{{ url_for('videos', camera_id=camera_id) }}">Recorded Videos</a>
+                <a href="{{ url_for('incident_videos', camera_id=camera_id) }}">Incident Video</a>
+                <a href="{{ url_for('settings_page', camera_id=camera_id) }}">Settings</a>
+                <a href="{{ url_for('camera_list') }}">All Cameras</a> <!-- Assuming this page does not need camera_id -->
             </div>
-        </div> 
+        </nav>
     </header>
     <h2 style="text-align: center; padding: 10px;">Settings</h2>
             <div class="settings-container">
-                <form method="POST" action="/update_settings" class="settings-form">
-                    <label for="max_videos">Max Videos:</label>
+                <form method="POST" action="{{ url_for('update_settings', camera_id=camera_id) }}" class="settings-form">                    <label for="max_videos">Max Videos:</label>
                     <input type="number" name="max_videos" id="max_videos" value="{{ max_videos }}">
                     
                     <label for="video_duration">Video Duration (seconds):</label>
