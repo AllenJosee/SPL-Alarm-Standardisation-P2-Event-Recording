@@ -55,14 +55,16 @@ nav {
     box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
 }
     
-.user_info{
+.user_info {
     text-align: right;
-    align-items: right;
-    height: 100%;
     padding-right: 15px;
-    padding-left: 800px;
 }
-   
+
+.user_info h1 {
+    margin: 0;
+    font-size: 24px;
+} 
+  
 .container {
     padding: 20px;
 }

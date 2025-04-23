@@ -385,7 +385,7 @@ def videos(camera_id):
     if camera is None:
         return "Camera not found", 404
     videos_list = camera.load_videos_from_folder(camera.recordings_dir)
-    return render_template("videos.html", videos=videos_list, camera_id=camera_id)
+    return render_template("videos.html", videos=videos_list, camera_id=camera_id, username=session['username'])
 
 @app.route('/incident_videos/<camera_id>')
 @login_required
@@ -394,7 +394,7 @@ def incident_videos(camera_id):
     if camera is None:
         return "Camera not found", 404
     incident_videos = camera.load_incident_videos()
-    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id)
+    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id, username=session['username'])
 
 @app.route('/settings_page/<camera_id>')
 @login_required
@@ -402,7 +402,7 @@ def settings_page(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
-    return render_template('settings.html', camera_id=camera_id)
+    return render_template('settings.html', camera_id=camera_id, username=session['username'])
 
 @app.route('/update_settings/<camera_id>', methods=['POST'])
 @login_required
