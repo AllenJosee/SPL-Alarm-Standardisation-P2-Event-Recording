@@ -29,6 +29,18 @@
         </nav>
     </header>
     <h2 style="text-align: center; padding: 10px;">Settings</h2>
+    <div class="flash-message-container" style="width: 80%; margin: 10px auto; text-align: center;"> <!-- Optional container styling -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <!-- Use the category (e.g., 'error', 'success', 'warning') for styling -->
+                    <div class="alert alert-{{ category }}" style="padding: 10px; margin-bottom: 10px; border-radius: 4px;"> <!-- Basic inline style -->
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
             <div class="settings-container">
                 <form method="POST" action="{{ url_for('update_settings', camera_id=camera_id) }}" class="settings-form">                    <label for="max_videos">Max Videos:</label>
                     <input type="number" name="max_videos" id="max_videos" value="{{ max_videos }}">

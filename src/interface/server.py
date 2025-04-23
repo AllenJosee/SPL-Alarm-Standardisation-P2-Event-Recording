@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory
+from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash
 import os
 import cv2
 import json
@@ -402,8 +402,6 @@ def settings_page(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
-
-    # Assuming camera has attributes max_videos and video_duration
     return render_template('settings.html', camera_id=camera_id)
 
 @app.route('/update_settings/<camera_id>', methods=['POST'])
@@ -411,11 +409,54 @@ def settings_page(camera_id):
 def update_settings(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
-        return "Camera not found", 404
-    max_videos = request.form.get("max_videos", type=int)
-    video_duration = request.form.get("video_duration", type=int)
-    camera.update_settings(max_videos, video_duration)
-    return redirect(url_for("index", camera_id=camera_id)) 
+        flash(f"Camera {camera_id} not found.", 'error')
+        return redirect(url_for("camera_list"))
+
+    max_videos_str = request.form.get("max_videos")
+    video_duration_str = request.form.get("video_duration")
+
+    error = None 
+    validated_max_videos = None
+    validated_video_duration = None
+
+    if not max_videos_str:
+        error = "Max Videos value cannot be empty."
+    elif not video_duration_str:
+        error = "Video Duration value cannot be empty."
+    else:
+        try:
+            validated_max_videos = int(max_videos_str)
+            validated_video_duration = int(video_duration_str)
+            if validated_max_videos <= 0:
+                error = "Max Videos must be a positive number (greater than zero)."
+            elif validated_video_duration <= 0:
+                error = "Video Duration must be a positive number (greater than zero)."
+
+        except ValueError:
+            error = "Max Videos and Video Duration must be valid whole numbers."
+
+    if error:
+        flash(error, 'error')
+        current_settings = {
+            "max_videos": camera.settings.get("max_videos", 5),
+            "video_duration": camera.settings.get("video_duration", 5)
+        }
+        return render_template('settings.html', camera_id=camera_id, current_settings=current_settings), 400 # Optional: 400 Bad Request status
+    try:
+        success = camera.update_settings(validated_max_videos, validated_video_duration)
+
+        if success is False: 
+             flash(f"Failed to save settings for Camera {camera_id}. Check server logs.", 'error')
+        else:
+             flash(f"Settings for Camera {camera_id} updated successfully.", 'success')
+        return redirect(url_for("index", camera_id=camera_id))
+
+    except Exception as e:
+        print(f"ERROR during update_settings call for Camera {camera_id}: {e}")
+        flash("An unexpected error occurred while updating settings.", 'error')
+        current_settings = camera.settings
+        return render_template('settings.html', camera_id=camera_id, current_settings=current_settings), 500 # Internal Server Error
+
 
 @app.route("/update_info/<camera_id>", methods=["POST"])
 def update_info(camera_id):
