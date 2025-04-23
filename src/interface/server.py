@@ -15,7 +15,8 @@ settings_file = "src/settings.json"
 
 class Camera:
     #device index=0 -> webcam
-    def __init__(self, recordings_dir, incidents_dir, settings_file, description="", device_index=0):
+    def __init__(self, camera_id, recordings_dir, incidents_dir, settings_file, description="", device_index=0):
+        self.camera_id = str(camera_id)
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
@@ -30,6 +31,7 @@ class Camera:
 
     def to_dict(self):
         return {
+            "camera_id": self.camera_id,
             "recordings_dir": self.recordings_dir,
             "incidents_dir": self.incidents_dir,
             "settings_file": self.settings_file,
@@ -38,7 +40,17 @@ class Camera:
     
     @staticmethod
     def from_dict(data):
-        return Camera(data["recordings_dir"], data["incidents_dir"], data["settings_file"], data.get("description", ""))
+        # Expect camera_id to be in the data dictionary now
+        if 'camera_id' not in data:
+            # Handle cases where old JSON might not have it (optional)
+            raise ValueError("Camera data dictionary missing 'camera_id'")
+        return Camera(
+            data["camera_id"],
+            data["recordings_dir"],
+            data["incidents_dir"],
+            data["settings_file"],
+            data.get("description", "")
+        )
 
     def load_settings(self):
         if not os.path.exists(self.settings_file):
@@ -79,10 +91,22 @@ class Camera:
 
     def record_video(self):
         while self.recording:
-            filename = time.strftime("%Y%m%d-%H%M%S") + ".mp4"
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"cam{self.camera_id}_{timestamp}.mp4"
+            
             filepath = os.path.join(self.recordings_dir, filename)
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            out = cv2.VideoWriter(filepath, fourcc, 15, (640, 480))
+            try:
+                out = cv2.VideoWriter(filepath, fourcc, 15, (640, 480))
+                if not out.isOpened():
+                    print(f"Error: Could not open VideoWriter for {filepath}")
+                    time.sleep(1) 
+                    continue 
+            except Exception as e:
+                print(f"Error creating VideoWriter for {filepath}: {e}")
+                time.sleep(1)
+                continue
+
             start_time = time.time()
             frame_count = 0
             total_frames = int(15 * self.settings["video_duration"])
@@ -92,20 +116,41 @@ class Camera:
                     out.write(frame)
                     frame_count += 1
                 else:
-                    break
+                    print(f"Warning: Could not read frame from camera {self.camera_id}")
+                    break 
             out.release()
-            if len(self.load_videos_from_folder(self.recordings_dir)) > self.settings["max_videos"]:
-                oldest_video = sorted(os.listdir(self.recordings_dir), key=lambda x: os.path.getctime(os.path.join(self.recordings_dir, x)))[0]
-                os.remove(os.path.join(self.recordings_dir, oldest_video))
+
+            current_videos = self.load_videos_from_folder(self.recordings_dir)
+            if len(current_videos) > self.settings["max_videos"]:
+                 # Sort files by creation time to find the oldest
+                 try:
+                    all_files = [(f, os.path.getctime(os.path.join(self.recordings_dir, f)))
+                                 for f in os.listdir(self.recordings_dir) if f.endswith(".mp4")]
+                    all_files.sort(key=lambda x: x[1]) # Sort by timestamp (index 1)
+                    if all_files:
+                        oldest_video_filename = all_files[0][0] # Get filename of oldest
+                        os.remove(os.path.join(self.recordings_dir, oldest_video_filename))
+                        print(f"Removed oldest video: {oldest_video_filename}") # Optional log
+                 except Exception as e:
+                    print(f"Error pruning videos for camera {self.camera_id}: {e}")
+
     
     def simulate_incident(self):
         incident_timestamp = time.strftime("%Y%m%d-%H%M%S")
-        incident_folder = os.path.join(self.incidents_dir, incident_timestamp)
-        os.makedirs(incident_folder, exist_ok=True)
+        incident_folder_name = f"cam{self.camera_id}_incident_{incident_timestamp}"
+        incident_folder_path = os.path.join(self.incidents_dir, incident_folder_name)        
+        os.makedirs(incident_folder_path, exist_ok=True)
         for video in reversed(self.load_videos_from_folder(self.recordings_dir)):
-            shutil.copy(os.path.join(self.recordings_dir, video["filename"]), incident_folder)
-            if len(os.listdir(incident_folder)) >= 6:
-                break
+            try:
+                source_path = os.path.join(self.recordings_dir, video["filename"])
+                destination_path = os.path.join(incident_folder_path, video["filename"])
+                shutil.copy(source_path, destination_path)
+                if len(os.listdir(incident_folder_path)) >= 6: # Check number of files copied
+                    break
+            except FileNotFoundError:
+                print(f"Warning: Video file {video['filename']} not found during incident copy for camera {self.camera_id}.")
+            except Exception as e:
+                print(f"Error copying video {video['filename']} for incident: {e}")
 
     #Video Feed
     def generate_video_feed(self):
@@ -151,13 +196,30 @@ def save_cameras_to_json():
     
 def load_cameras_from_json():
     global cameras
-    if os.path.exists('cameras.json'):
-        with open('cameras.json', 'r') as f:
-            camera_data = json.load(f)
-            cameras = {camera_id: Camera.from_dict(data) for camera_id, data in camera_data.items()}
+    cameras = {} # Start fresh
+    filepath = 'cameras.json'
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r') as f:
+                loaded_data = json.load(f)
+                for cam_id_key, camera_config_data in loaded_data.items():
+                    # Ensure the config data itself contains the matching camera_id for from_dict
+                    if 'camera_id' not in camera_config_data:
+                         print(f"Warning: 'camera_id' key missing in config for {cam_id_key}. Using dictionary key as ID.")
+                         camera_config_data['camera_id'] = cam_id_key # Add it for consistency
+
+                    # Create Camera object using the config dictionary
+                    try:
+                         cameras[cam_id_key] = Camera.from_dict(camera_config_data)
+                    except Exception as e:
+                         print(f"Error creating Camera object for ID {cam_id_key} from loaded data: {e}")
+
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON from {filepath}. Starting with empty camera list.")
+        except Exception as e:
+            print(f"Error loading cameras from {filepath}: {e}. Starting with empty camera list.")
 
 
-cameras = {}
 load_cameras_from_json()
 
 #Load users
@@ -231,28 +293,74 @@ def camera_list():
 @app.route('/add_camera', methods=['GET', 'POST'])
 @login_required
 def add_camera():
+    error = None
     if request.method == 'POST':
-        camera_id = request.form.get('camera_id')
-        description = request.form.get('description', '').strip()  # Get the description from the form
-        new_camera = Camera(
-            f"src/recordings/camera{camera_id}",
-            f"src/incidents/camera{camera_id}",
-            f"src/settings_camera{camera_id}.json",
-            description  # Pass the description to the Camera constructor
-        )
-        cameras[camera_id] = new_camera
-        save_cameras_to_json()  # Save the updated cameras to JSON
-        return redirect(url_for('camera_list'))
-    return render_template('add_camera.html')
+        camera_id_str = request.form.get('camera_id', '').strip()
+        description = request.form.get('description', '').strip()
+        if not camera_id_str:
+            error = "Camera ID cannot be empty."
+        elif camera_id_str in cameras:
+            error = f"Camera ID '{camera_id_str}' already exists. Please choose a different ID."
+        elif not camera_id_str.isdigit():
+             error = "Camera ID must contain only numbers (e.g., 1, 2, 10)."
+        elif int(camera_id_str) <= 0:
+             error = "Camera ID must be a positive number (greater than zero)."
+
+        if error is None:
+            try:
+                # Use the validated string ID as the key
+                camera_id_key = camera_id_str
+                new_camera = Camera(
+                    camera_id=camera_id_key, # Pass the ID here
+                    recordings_dir=f"src/recordings/camera{camera_id_key}",
+                    incidents_dir=f"src/incidents/camera{camera_id_key}",
+                    settings_file=f"src/settings_camera{camera_id_key}.json",
+                    description=description
+                )
+                cameras[camera_id_key] = new_camera
+                save_cameras_to_json()  # Save the updated cameras to JSON
+                return redirect(url_for('camera_list'))
+            except Exception as e: 
+                print(f"Error creating camera {camera_id_key}: {e}")
+                error = "An unexpected error occurred while adding the camera."
+                return render_template('add_camera.html', error=error)
+
+    return render_template('add_camera.html', error =error)
 
 #Delete camera
 @app.route('/delete_camera/<camera_id>', methods=['POST'])
 @login_required
 def delete_camera(camera_id):
     if camera_id in cameras:
-        del cameras[camera_id] 
-        save_cameras_to_json() 
-        return redirect(url_for('camera_list'))  
+        camera_to_delete = cameras[camera_id]
+        recordings_path = camera_to_delete.recordings_dir
+        incidents_path = camera_to_delete.incidents_dir
+        settings_path = camera_to_delete.settings_file
+        try: 
+            del cameras[camera_id]
+            save_cameras_to_json()
+            if recordings_path and os.path.exists(recordings_path):
+                shutil.rmtree(recordings_path)
+                print(f"Successfully deleted directory: {recordings_path}")
+                print(f"Directory not found or path invalid, skipping deletion: {recordings_path}")
+
+            if incidents_path and os.path.exists(incidents_path):
+                shutil.rmtree(incidents_path)
+                print(f"Successfully deleted directory: {incidents_path}")
+            else:
+                print(f"Directory not found or path invalid, skipping deletion: {incidents_path}")
+
+            if settings_path and os.path.exists(settings_path):
+                os.remove(settings_path)
+                print(f"Successfully deleted file: {settings_path}")
+            else:
+                print(f"Settings file not found or path invalid, skipping deletion: {settings_path}")
+
+            return redirect(url_for('camera_list'))
+        except OSError as e:
+            print(f"Error deleting files/folders for camera {camera_id}: {e}")
+            return redirect(url_for('camera_list'))
+        
     return "Camera not found", 404  
 
 
