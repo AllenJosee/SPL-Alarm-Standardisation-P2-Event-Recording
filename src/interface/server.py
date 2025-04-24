@@ -402,7 +402,18 @@ def settings_page(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
-    return render_template('settings.html', camera_id=camera_id, username=session['username'])
+    current_settings = {}
+    try:
+        with open(camera.settings_file, 'r') as f:
+            current_settings = json.load(f)
+    except Exception as e:
+        print(f"Error loading settings for camera {camera_id}: {e}")
+        current_settings = {
+            "max_videos": "Error loading",
+            "video_duration": "Error loading"
+        }
+    return render_template('settings.html', camera_id=camera_id, username=session['username'], current_settings=current_settings)
+    #return render_template('settings.html', camera_id=camera_id, username=session['username'])
 
 @app.route('/update_settings/<camera_id>', methods=['POST'])
 @login_required
@@ -510,6 +521,6 @@ def video_feed(camera_id):
 
 
 if __name__ == "__main__":
-    load_cameras_from_json
+    load_cameras_from_json()
     app.run(debug=True)
         

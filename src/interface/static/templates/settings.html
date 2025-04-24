@@ -32,21 +32,53 @@
             </div>
         </nav>
     </header>
-    <h2 style="text-align: center; padding: 10px;">Settings</h2>
-    <div class="flash-message-container" style="width: 80%; margin: 10px auto; text-align: center;"> <!-- Optional container styling -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <!-- Use the category (e.g., 'error', 'success', 'warning') for styling -->
-                    <div class="alert alert-{{ category }}" style="padding: 10px; margin-bottom: 10px; border-radius: 4px;"> <!-- Basic inline style -->
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    </div>
+        <h1 style="text-align: center; padding: 10px;">Camera {{ camera_id }}</h1>
             <div class="settings-container">
-                <form method="POST" action="{{ url_for('update_settings', camera_id=camera_id) }}" class="settings-form">                    <label for="max_videos">Max Videos:</label>
+                <div class="current-settings" style="
+                    background-color: #f0f0f0;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 25px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                ">
+                    <h3 style="
+                        margin-top: 0;
+                        color: #333;
+                        font-size: 1.4rem;
+                        border-bottom: 2px solid #ddd;
+                        padding-bottom: 10px;
+                        text-align: center;
+                    ">Current Settings</h3>
+                    
+                    <div style="
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 15px;
+                        font-size: 1.2rem;
+                    ">
+                        <div>
+                            <span style="font-weight: 600; color: #444;">Max Videos:</span>
+                            <span style="font-size: 1.4rem; color: #2c3e50;">{{ current_settings.max_videos }}</span>
+                        </div>
+                        <div>
+                            <span style="font-weight: 600; color: #444;">Video Duration:</span>
+                            <span style="font-size: 1.4rem; color: #2c3e50;">{{ current_settings.video_duration }} seconds</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flash-message-container" style="width: 80%; margin: 10px auto; text-align: center;">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}" style="padding: 10px; margin-bottom: 10px; border-radius: 4px;">
+                                    {{ message }}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                <form method="POST" action="{{ url_for('update_settings', camera_id=camera_id) }}" class="settings-form">
+                    <label for="max_videos">Max Videos:</label>
                     <input type="number" name="max_videos" id="max_videos" value="{{ max_videos }}">
                     
                     <label for="video_duration">Video Duration (seconds):</label>

@@ -37,7 +37,7 @@
     
     
     <div class="container">
-        <h2 style="text-align: center; padding: 10px;" >Camera {{ camera_id }}</h2>
+        <h1 style="text-align: center; padding: 10px;" >Camera {{ camera_id }}</h1>
             <div class="stream-container">
                 <div class="live-stream">
                     <img src="{{ url_for('video_feed', camera_id=camera_id) }}" alt="Video Feed" />                    <div class="status-circle" id="status-circle"></div>
