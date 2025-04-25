@@ -376,4 +376,15 @@ button:hover {
     background-color: #c9302c; /* Darker red on hover */
 }
 
-/* --- End Custom Modal Styles --- */
+#confirmLogoutBtn {
+    background-color: #dc3545; /* Example: Bootstrap's danger red */
+    color: white;             /* Example: White text */
+    border-color: #c82333;   /* Example: Slightly darker border */
+    /* Add any other styles like padding, font-weight if needed */
+}
+
+/* Optional: Style on hover */
+#confirmLogoutBtn:hover {
+    background-color: #c82333; /* Example: Darker red on hover */
+    border-color: #bd2130;
+}

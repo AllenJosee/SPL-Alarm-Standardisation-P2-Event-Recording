@@ -37,6 +37,19 @@
             <button id="confirmDeleteBtn" class="modal-button confirm-delete">Confirm Delete</button>
         </div>
 </div>
+    <div id="logoutConfirmModalOverlay" class="modal-overlay" style="display: none;"></div>
+    <div id="logoutConfirmModal" class="modal" style="display: none;">
+        <div class="modal-header">
+            <h3>Confirm Logout</h3>
+        </div>
+        <div class="modal-body">
+            <p id="logoutModalMessage">Are you sure you want to log out? This will release all active camera connections.</p>
+        </div>
+        <div class="modal-footer">
+            <button id="cancelLogoutBtn" class="modal-button cancel">Cancel</button>
+            <button id="confirmLogoutBtn" class="modal-button confirm">Confirm Logout</button> <!-- Changed class slightly for clarity if needed -->
+        </div>
+    </div>
     <div>
         <div class="camera-actions">
             <a href="{{ url_for('add_camera') }}" class="control-button green">Add New Camera</a><a href="{{ url_for('feed_view') }} " class="control-button blue">Feed View</a>
@@ -63,7 +76,7 @@
 <!-- <button class="view-all-button">Feed View</button> -->
 <div class="section-divider"></div>
 <div class="control-buttons">
-    <form method="post" action="/logout">
+    <form method="post" action="/logout" onsubmit="showLogoutConfirmation(event);">
         <input type="submit" value="Logout" class="control-button red">
     </form>
 </div>
@@ -123,6 +136,78 @@
 
     cancelBtn.addEventListener('click', hideModal);
     modalOverlay.addEventListener('click', hideModal); // Close if overlay is clicked
+
+</script>
+<script>
+    // --- Existing Delete Modal Script ---
+    const deleteModalOverlay = document.getElementById('deleteConfirmModalOverlay');
+    const deleteModal = document.getElementById('deleteConfirmModal');
+    const deleteModalMessage = document.getElementById('modalMessage'); // Keep original name for delete message
+    const deleteConfirmBtn = document.getElementById('confirmDeleteBtn');
+    const deleteCancelBtn = document.getElementById('cancelDeleteBtn');
+
+
+    function showDeleteConfirmation(event, cameraId) {
+        event.preventDefault(); // Prevent the default form submission
+        formToSubmit = event.target; // Store the form that triggered the event (DELETE form)
+
+        deleteModalMessage.textContent = `Are you sure you want to delete Camera ${cameraId}? ` +
+                                   `This action cannot be undone and will permanently delete ` +
+                                   `all recordings, incidents, and settings files associated with it.`;
+
+        deleteModalOverlay.style.display = 'block';
+        deleteModal.style.display = 'block';
+    }
+
+    function hideDeleteModal() {
+        deleteModalOverlay.style.display = 'none';
+        deleteModal.style.display = 'none';
+        formToSubmit = null; // Clear the stored form
+    }
+
+    deleteConfirmBtn.addEventListener('click', () => {
+        if (formToSubmit) {
+            formToSubmit.submit(); // Submit the stored form (will be DELETE form)
+        }
+        hideDeleteModal();
+    });
+
+    deleteCancelBtn.addEventListener('click', hideDeleteModal);
+    deleteModalOverlay.addEventListener('click', hideDeleteModal);
+
+
+    // --- NEW Logout Modal Script ---
+    const logoutModalOverlay = document.getElementById('logoutConfirmModalOverlay');
+    const logoutModal = document.getElementById('logoutConfirmModal');
+    // const logoutModalMessage = document.getElementById('logoutModalMessage'); // Message is static, no need for variable unless you change it dynamically
+    const logoutConfirmBtn = document.getElementById('confirmLogoutBtn');
+    const logoutCancelBtn = document.getElementById('cancelLogoutBtn');
+
+    function showLogoutConfirmation(event) {
+        event.preventDefault(); // Prevent the default form submission
+        formToSubmit = event.target; // Store the form that triggered the event (LOGOUT form)
+
+        // Display the logout modal
+        logoutModalOverlay.style.display = 'block';
+        logoutModal.style.display = 'block';
+    }
+
+    function hideLogoutModal() {
+        logoutModalOverlay.style.display = 'none';
+        logoutModal.style.display = 'none';
+        formToSubmit = null; // Clear the stored form
+    }
+
+    // Add event listeners for the logout modal buttons and overlay
+    logoutConfirmBtn.addEventListener('click', () => {
+        if (formToSubmit) {
+            formToSubmit.submit(); // Submit the stored form (will be LOGOUT form)
+        }
+        hideLogoutModal(); // Hide modal after action
+    });
+
+    logoutCancelBtn.addEventListener('click', hideLogoutModal);
+    logoutModalOverlay.addEventListener('click', hideLogoutModal);
 
 </script>
 </body>
