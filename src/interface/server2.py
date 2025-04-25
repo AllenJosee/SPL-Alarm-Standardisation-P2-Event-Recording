@@ -1,3 +1,8 @@
+#Cameras only initialized when details page is chosen
+#Very fast initial load time, but camera initialization is delayed until the details page is loaded.
+#Log out or stopping program will relase all cameras
+#Potential issues with all camera feed view?
+
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash
 import os
 import cv2

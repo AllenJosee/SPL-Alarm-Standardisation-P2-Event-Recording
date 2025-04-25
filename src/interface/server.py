@@ -1,3 +1,7 @@
+#All cameras are loaded from the beginning. More cameras => very long launch time.
+#Different ID cameras might conflict with each other, as there are no release.
+#May not have problems with all camera feed view
+
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash
 import os
 import cv2
