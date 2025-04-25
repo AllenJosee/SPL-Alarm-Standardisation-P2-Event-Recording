@@ -35,7 +35,7 @@ class Camera:
             "recordings_dir": self.recordings_dir,
             "incidents_dir": self.incidents_dir,
             "settings_file": self.settings_file,
-            "description": self.description  # Include description in the dictionary
+            "description": self.description 
         }
     
     @staticmethod
@@ -280,7 +280,7 @@ def index(camera_id):
     if camera is None:
         return "Camera not found", 404  # Handle the case where the camera ID is invalid
 
-    return render_template('index.html', username=session['username'], camera_id=camera_id)  # Pass camera_id to the template
+    return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description)  # Pass camera_id to the template
 
 @app.route('/camera_list')
 @login_required
@@ -295,21 +295,26 @@ def camera_list():
 def add_camera():
     error = None
     if request.method == 'POST':
-        camera_id_str = request.form.get('camera_id', '').strip()
         description = request.form.get('description', '').strip()
-        if not camera_id_str:
-            error = "Camera ID cannot be empty."
-        elif camera_id_str in cameras:
-            error = f"Camera ID '{camera_id_str}' already exists. Please choose a different ID."
-        elif not camera_id_str.isdigit():
-             error = "Camera ID must contain only numbers (e.g., 1, 2, 10)."
-        elif int(camera_id_str) <= 0:
-             error = "Camera ID must be a positive number (greater than zero)."
+        
+        next_id_int = 1
+        if cameras: 
+            numeric_ids = []
+            for key in cameras.keys():
+                try: 
+                    numeric_ids.append(int(key))
+                except ValueError:
+                    print(f"Warning: Non-integer camera key found and ignored: {key}")
+                    pass
+            if numeric_ids:
+                next_id_int = max(numeric_ids) + 1
 
+        new_camera_id_str = str(next_id_int)  # Convert to string for the camera ID
+        
         if error is None:
             try:
                 # Use the validated string ID as the key
-                camera_id_key = camera_id_str
+                camera_id_key = new_camera_id_str
                 new_camera = Camera(
                     camera_id=camera_id_key, # Pass the ID here
                     recordings_dir=f"src/recordings/camera{camera_id_key}",
@@ -385,7 +390,7 @@ def videos(camera_id):
     if camera is None:
         return "Camera not found", 404
     videos_list = camera.load_videos_from_folder(camera.recordings_dir)
-    return render_template("videos.html", videos=videos_list, camera_id=camera_id, username=session['username'])
+    return render_template("videos.html", videos=videos_list, camera_id=camera_id, username=session['username'],description=camera.description )
 
 @app.route('/incident_videos/<camera_id>')
 @login_required
@@ -394,7 +399,7 @@ def incident_videos(camera_id):
     if camera is None:
         return "Camera not found", 404
     incident_videos = camera.load_incident_videos()
-    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id, username=session['username'])
+    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id, username=session['username'], description=camera.description)
 
 @app.route('/settings_page/<camera_id>')
 @login_required
@@ -412,7 +417,7 @@ def settings_page(camera_id):
             "max_videos": "Error loading",
             "video_duration": "Error loading"
         }
-    return render_template('settings.html', camera_id=camera_id, username=session['username'], current_settings=current_settings)
+    return render_template('settings.html', camera_id=camera_id, username=session['username'], current_settings=current_settings, description=camera.description)
     #return render_template('settings.html', camera_id=camera_id, username=session['username'])
 
 @app.route('/update_settings/<camera_id>', methods=['POST'])

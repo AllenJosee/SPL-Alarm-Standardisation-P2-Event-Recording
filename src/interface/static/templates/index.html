@@ -19,7 +19,7 @@
             </div>
             <div class="user_info">
                 <h1>Welcome {{ username }}!</h1>
-                <h2>Current Camera ID: {{ camera_id }}</h2>
+                <h2>Current Camera : {{ description }}</h2>
             </div>
         </div>
         
@@ -37,7 +37,7 @@
     
     
     <div class="container">
-        <h1 style="text-align: center; padding: 10px;" >Camera {{ camera_id }}</h1>
+        <h1 style="text-align: center; padding: 10px;" >{{ description }}</h1>
             <div class="stream-container">
                 <div class="live-stream">
                     <img src="{{ url_for('video_feed', camera_id=camera_id) }}" alt="Video Feed" />                    <div class="status-circle" id="status-circle"></div>

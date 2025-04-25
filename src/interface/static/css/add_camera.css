@@ -128,10 +128,11 @@ button:hover {
     padding: 10px;
     font-size: 16px;
     border: 2px solid #ccc;
-    border-radius: 10px;
+    border-radius: 15px;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 10px; /* Add some space below the input fields */
 }
 .login-form input:focus {
     border-color: green;
@@ -140,13 +141,15 @@ button:hover {
 }
 .login-button {
     padding: 15px 12px;
-    font-size: 14px;
+    font-size: 20px;
     color: white;
     border: none;
-    border-radius: 5px;
+    border-radius: 30px;
     background-color: #007BFF;
     cursor: pointer;
     transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    text-align: center;
+    margin-top: 10px;
 }
 .login-button:hover {
     background-color: #0056b3;

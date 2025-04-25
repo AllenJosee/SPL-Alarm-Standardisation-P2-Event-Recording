@@ -45,10 +45,10 @@
         {% for camera_id, camera in cameras.items() %}
         <div class="camera-item">
             <div class="camera-info">
-                <h3>Camera {{ camera_id }}</h3>
                 {% if camera.description %}  <!-- Check if description exists -->
-                    <p>{{ camera.description }}</p>  <!-- Display the camera description here -->
-                {% endif %}            
+                <h3>{{ camera.description }}</h3>  <!-- Display the camera description here -->
+                {% endif %}   
+                <p>camera {{ camera_id }}</p>         
             </div>
             <div class="camera-actions">
                 <form method="POST" action="{{ url_for('delete_camera', camera_id=camera_id) }}" onsubmit="showDeleteConfirmation(event, '{{ camera_id }}');">

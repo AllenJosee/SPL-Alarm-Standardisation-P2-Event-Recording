@@ -18,7 +18,7 @@
             </div>
             <div class="user_info">
                 <h1>Welcome {{ username }}!</h1>
-                <h2>Current Camera ID: {{ camera_id }}</h2>
+                <h2>Current Camera : {{ description }}</h2>
             </div>
             
         </div>
@@ -35,7 +35,7 @@
 
     
     <div class="container">
-        <h1 style="text-align: center">Video List</h1>
+        <h1 style="text-align: center; padding-bottom: 10px;">Video List for {{ description }}</h1>
         <div class="center-container">
             <form method="POST" action="{{ url_for('update_info', camera_id=camera_id) }}">
                 <button type="submit" class="action-button update-button">Update Info</button>

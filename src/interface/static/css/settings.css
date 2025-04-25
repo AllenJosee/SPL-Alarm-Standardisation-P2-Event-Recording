@@ -133,7 +133,7 @@ button {
     padding: 10px;
     font-size: 16px;
     border: 2px solid #ccc;
-    border-radius: 10px;
+    border-radius: 15px;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -147,7 +147,7 @@ button {
 .submit-button {
     font-size: 20px;
     border: none;
-    border-radius: 15px;
+    border-radius: 30px;
     background-color: rgb(0, 0, 0);
     color: white;
     cursor: pointer;
