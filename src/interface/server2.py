@@ -94,21 +94,61 @@ class Camera:
 
     def load_videos_from_folder(self, folder):
         videos = []
-        for file in os.listdir(folder):
+        if not os.path.isdir(folder):
+            print(f"  [load_videos_from_folder Camera {self.camera_id}] ERROR: Directory not found: {folder}")
+            return [] 
+
+        try:
+            all_items_in_dir = os.listdir(folder)
+        except Exception as e:
+            return [] 
+
+        for file in all_items_in_dir:
             if file.endswith(".mp4"):
                 filepath = os.path.join(folder, file)
-                videos.append({"filename": file, "timestamp": time.ctime(os.path.getctime(filepath))})
+                try:
+                    raw_ts = os.path.getctime(filepath)
+                    display_ts = time.ctime(raw_ts)
+                    videos.append({
+                        "filename": file,
+                        "timestamp": display_ts,
+                        "raw_timestamp": raw_ts
+                    })
+                except FileNotFoundError:
+                    print(f"      [load_videos_from_folder] ERROR: FileNotFoundError getting timestamp for {filepath}. Skipping.")
+                except Exception as e:
+                    print(f"      [load_videos_from_folder] ERROR: Exception getting timestamp/appending for {filepath}: {e}. Skipping.")
+            else:
+                 print(f"      [load_videos_from_folder] Item is NOT an .mp4 file. Skipping.")
+
+        print(f"  [load_videos_from_folder Camera {self.camera_id}] Finished processing. Returning list with {len(videos)} videos.")
         return videos
+
 
     def load_incident_videos(self):
         incident_videos = []
+        if not os.path.isdir(self.incidents_dir):
+             print(f"Warning: Incident directory not found: {self.incidents_dir}")
+             return []
         for folder in os.listdir(self.incidents_dir):
             folder_path = os.path.join(self.incidents_dir, folder)
             if os.path.isdir(folder_path):
                 for file in os.listdir(folder_path):
                     if file.endswith(".mp4"):
                         file_path = os.path.join(folder_path, file)
-                        incident_videos.append({"filename": file, "path": file_path})
+                        try: 
+                            raw_ts = os.path.getctime(file_path)
+                            display_ts = time.ctime(raw_ts)
+                            incident_videos.append({
+                                "filename": file,
+                                "incident_folder": folder,
+                                "timestamp": display_ts,     
+                                "raw_timestamp": raw_ts     
+                            })
+                        except FileNotFoundError:
+                            print(f"Warning: Incident file not found while loading, skipping: {file_path}")
+                        except Exception as e:
+                            print(f"Warning: Error getting timestamp for incident file {file_path}, skipping: {e}")
         return incident_videos
 
     
@@ -130,7 +170,7 @@ class Camera:
             filename = f"cam{self.camera_id}_{timestamp}.mp4"
             
             filepath = os.path.join(self.recordings_dir, filename)
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            fourcc = cv2.VideoWriter_fourcc(*"avc1")
             
             try:
                 # Ensure capture is still valid before creating writer
@@ -177,7 +217,7 @@ class Camera:
             current_videos = self.load_videos_from_folder(self.recordings_dir)
             if len(current_videos) > self.settings["max_videos"]:
                  # Sort files by creation time to find the oldest
-                 try:
+                 try: 
                     all_files = [(f, os.path.getctime(os.path.join(self.recordings_dir, f)))
                                  for f in os.listdir(self.recordings_dir) if f.endswith(".mp4")]
                     all_files.sort(key=lambda x: x[1]) # Sort by timestamp (index 1)
@@ -241,15 +281,6 @@ class Camera:
 # Initialize Flask app
 app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
-
-# Initialize a single camera object
-
-#camera1 = Camera("src/recordings/camera1", "src/incidents/camera1", "src/settings_camera1.json")
-#camera2 = Camera("src/recordings/camera2", "src/incidents/camera2", "src/settings_camera2.json")
-#cameras = {
-    #"1": Camera("src/recordings/camera1", "src/incidents/camera1", "src/settings_camera1.json"),
-    #"2": Camera("src/recordings/camera2", "src/incidents/camera2", "src/settings_camera2.json"),
-#}
 
 
 def save_cameras_to_json():
@@ -472,17 +503,29 @@ def videos(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
+    print(f"\n[DEBUG /videos/{camera_id}] Loading videos from: {camera.recordings_dir}")
     videos_list = camera.load_videos_from_folder(camera.recordings_dir)
-    return render_template("videos.html", videos=videos_list, camera_id=camera_id, username=session['username'],description=camera.description )
+    print(f"[DEBUG /videos/{camera_id}] BEFORE SORT ({len(videos_list)} items):")
+    for v in videos_list:
+        print(f"  - {v.get('filename')}: {v.get('raw_timestamp')}")
 
+    sorted_videos = sorted(videos_list, key=lambda v: v.get('raw_timestamp', 0), reverse=True)
+
+    print(f"[DEBUG /videos/{camera_id}] AFTER SORT ({len(sorted_videos)} items):")
+    for v in sorted_videos:
+        print(f"  - {v.get('filename')}: {v.get('raw_timestamp')}")
+    print("-" * 20)
+
+    return render_template("videos.html", videos=sorted_videos, camera_id=camera_id, username=session['username'], description=camera.description )
 @app.route('/incident_videos/<camera_id>')
 @login_required
 def incident_videos(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
-    incident_videos = camera.load_incident_videos()
-    return render_template("incident_vid.html", incident_videos=incident_videos, camera_id=camera_id, username=session['username'], description=camera.description)
+    incident_videos_list = camera.load_incident_videos()
+    sorted_incident_videos = sorted(incident_videos_list, key=lambda v: v.get('raw_timestamp', 0), reverse=True)
+    return render_template("incident_vid.html", incident_videos=sorted_incident_videos, camera_id=camera_id, username=session['username'], description=camera.description)
 
 @app.route('/settings_page/<camera_id>')
 @login_required
@@ -559,21 +602,19 @@ def update_settings(camera_id):
 
 @app.route("/update_info/<camera_id>", methods=["POST"])
 def update_info(camera_id):
-    # Reload video information (dynamically triggered)
     return redirect(url_for("videos", camera_id=camera_id))
 
 @app.route("/update_incident_info/<camera_id>", methods=["POST"])
 def update_incident_info(camera_id):
-    # Reload video information (dynamically triggered)
     return redirect(url_for("incident_videos", camera_id=camera_id))
 
 
 @app.route('/start_recording/<camera_id>', methods=['POST'])
 @login_required
 def start_recording(camera_id):
-    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    camera = cameras.get(camera_id)  
     if camera is None:
-        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+        return "Camera not found", 404  
 
     camera.recording = True
     Thread(target=camera.record_video).start()
@@ -582,9 +623,9 @@ def start_recording(camera_id):
 @app.route('/stop_recording/<camera_id>', methods=['POST'])
 @login_required
 def stop_recording(camera_id):
-    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    camera = cameras.get(camera_id) 
     if camera is None:
-        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+        return "Camera not found", 404  
 
     camera.recording = False
     return "", 204
@@ -592,20 +633,59 @@ def stop_recording(camera_id):
 @app.route('/simulate_incident/<camera_id>', methods=['POST'])
 @login_required
 def simulate_incident(camera_id):
-    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    camera = cameras.get(camera_id)  
     if camera is None:
-        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+        return "Camera not found", 404  
 
     camera.simulate_incident()
     return '', 204
 
 @app.route("/video_feed/<camera_id>")
 def video_feed(camera_id):
-    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
+    camera = cameras.get(camera_id) 
     if camera is None:
-        return "Camera not found", 404  # Handle the case where the camera ID is invalid
+        return "Camera not found", 404  
 
     return Response(camera.generate_video_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+#New Route for video playbacks
+@app.route('/serve_video/<camera_id>/recordings/<filename>')
+@login_required # Keep it protected
+def serve_recorded_video(camera_id, filename):
+    camera = cameras.get(camera_id)
+    if not camera:
+        return "Camera not found", 404
+    try: 
+        directory = os.path.abspath(camera.recordings_dir)
+        print(f"Serving recorded video: directory='{directory}', filename='{filename}'") # Debug log
+        return send_from_directory(directory, filename, as_attachment=False) # as_attachment=False tries to play inline
+    except FileNotFoundError:
+        print(f"File not found: {os.path.join(directory, filename)}") # Debug log
+        return "Video file not found", 404
+    except Exception as e:
+        print(f"Error serving recorded video {filename} for camera {camera_id}: {e}")
+        return "Error serving video", 500
+
+#New Route for incident playbacks
+@app.route('/serve_video/<camera_id>/incidents/<incident_folder>/<filename>')
+@login_required
+def serve_incident_video(camera_id, incident_folder, filename):
+    camera = cameras.get(camera_id)
+    if not camera:
+        return "Camera not found", 404
+
+    # Construct the path to the specific incident folder
+    try:
+        directory = os.path.abspath(os.path.join(camera.incidents_dir, incident_folder))
+        print(f"Serving incident video: directory='{directory}', filename='{filename}'") # Debug log
+        # Securely serve the file
+        return send_from_directory(directory, filename, as_attachment=False)
+    except FileNotFoundError:
+        print(f"File not found: {os.path.join(directory, filename)}") # Debug log
+        return "Incident video file not found", 404
+    except Exception as e:
+        print(f"Error serving incident video {filename} from {incident_folder} for camera {camera_id}: {e}")
+        return "Error serving video", 500
 
 def release_all_cameras():
     print("Releasing all camera captures on exit...")

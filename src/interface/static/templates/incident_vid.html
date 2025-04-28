@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <title>Recorded Videos</title>
+    <title>Incident Videos</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/incident.css') }}">
 </head>
 <body>
@@ -46,11 +46,11 @@
         </div>
        
             {% if incident_videos %}
-            <div class="status-circle" id="status-circle"></div>
             <table class="styled-table">
                 <thead>
                     <tr>
                         <th>Filename</th>
+                        <th>Timestamp</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -58,28 +58,114 @@
                     {% for video in incident_videos %}
                     <tr>
                         <td>{{ video.filename }}</td>
+                        <td>{{ video.timestamp }}</td>
                         <td class="actions">
-                            <button onclick="playVideo('{{ video.filename }}')" class="action-button play-button">Play</button>
-                            <a href="/static/{{ video.path }}" class="action-button download-button"target="_blank">Download</a>
-                            <!-- <a href="/static/{{ video.path }}" class="action-button view-button" target="_blank">View</a> -->
+                            <button type="button" onclick="playIncidentVideo('{{ camera_id }}', '{{ video.incident_folder }}', '{{ video.filename }}')" class="action-button play-button">Play</button>
+                            <a href="{{ url_for('serve_incident_video', camera_id=camera_id, incident_folder=video.incident_folder, filename=video.filename) }}" class="action-button download-button" download>Download</a>
                         </td>
                     </tr>
                 {% endfor %}
                 </tbody>
                 </table>
-                <!-- <div class="playback-section">
+                <div class="playback-section">
                     <h3>Playback</h3>
-                    <video id="video-player" controls>
-                        <source id="video-source" src="" type="video/mp4"></video>
-                </div> -->
-                <script>
-                    function playVideo(filename) {
-                        const videoSource = document.getElementById("video-source");
-                        const videoPlayer = document.getElementById("video-player");
-                        videoSource.src = `/src/recordings/${filename}`;
-                        videoPlayer.load();
-                        videoPlayer.scrollIntoView({ behavior: "smooth" }); 
-                    }
+                    <video id="video-player" controls width="640">
+                        <source id="video-source" src="" type="video/mp4">
+                    </video>
+                </div>
+            <script>
+                function playIncidentVideo(cameraId, incidentFolder, filename) {
+                    const originalVideoPlayer = document.getElementById("video-player");
+                    // Construct the URL using the incident route pattern
+                    const videoUrl = `/serve_video/${cameraId}/incidents/${incidentFolder}/${filename}`;
+
+                    console.log(`[playIncidentVideo] Request to play: ${filename} from folder ${incidentFolder} at ${videoUrl}`);
+
+                    // 1. Stop previous activity
+                    console.log("[playIncidentVideo] Pausing existing playback & clearing src...");
+                    originalVideoPlayer.pause();
+                    originalVideoPlayer.querySelector('#video-source').src = '';
+                    originalVideoPlayer.load();
+
+                    // 2. Delay (optional but can help stability)
+                    setTimeout(() => {
+                        console.log("[playIncidentVideo] Proceeding after short delay...");
+
+                        // 3. Clone player
+                        const newVideoPlayer = originalVideoPlayer.cloneNode(true);
+                        const newVideoSource = newVideoPlayer.querySelector('#video-source');
+
+                        // 4. Add listeners to NEW player
+                        newVideoPlayer.onloadedmetadata = () => {
+                            console.log(`[playIncidentVideo] Metadata loaded for ${filename}. Duration: ${newVideoPlayer.duration}`);
+                            console.log(`[playIncidentVideo] Attempting to play ${filename}...`);
+                            newVideoPlayer.play()
+                                .then(() => {
+                                    console.log(`[playIncidentVideo] Playback started successfully for ${filename}.`);
+                                    newVideoPlayer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                })
+                                .catch(error => {
+                                    console.error(`[playIncidentVideo] Error starting playback for ${filename} (inside play().catch):`, error);
+                                    if (error.name !== 'AbortError') {
+                                        alert(`Error playing video: ${error.message}\nCheck console (F12).`);
+                                    } else {
+                                        console.warn(`[playIncidentVideo] Playback aborted for ${filename}, likely due to new request.`);
+                                    }
+                                });
+                        };
+
+                        newVideoPlayer.onerror = (e) => {
+                            let errorMsg = `Unknown error loading/playing ${filename}.`;
+                            console.error(`[playIncidentVideo] Video Element Error Event for ${filename}:`, e);
+                            if (newVideoPlayer.error) {
+                                console.error(`[playIncidentVideo] MediaError code: ${newVideoPlayer.error.code}`, newVideoPlayer.error);
+                                switch (newVideoPlayer.error.code) {
+                                    case MediaError.MEDIA_ERR_ABORTED:
+                                        errorMsg = `Video loading/playback aborted (Code: ${newVideoPlayer.error.code}).`;
+                                        console.warn(`[playIncidentVideo] ${errorMsg}`);
+                                        return;
+                                    case MediaError.MEDIA_ERR_NETWORK:
+                                        errorMsg = `Video download failed due to network error (Code: ${newVideoPlayer.error.code}). Check network connection and server logs.`;
+                                        break;
+                                    case MediaError.MEDIA_ERR_DECODE:
+                                        errorMsg = `Video playback failed due to corruption or unsupported format/codec (Code: ${newVideoPlayer.error.code}). Please check video file integrity and encoding.`;
+                                        break;
+                                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                        errorMsg = `Video source format not supported or URL incorrect (Code: ${newVideoPlayer.error.code}). Check Content-Type header and URL.`;
+                                        break;
+                                    default:
+                                        errorMsg = `An unknown media error occurred (Code: ${newVideoPlayer.error.code}).`;
+                                        break;
+                                }
+                            } else {
+                                errorMsg = "Video element error occurred, but no specific error code available.";
+                                console.error("[playIncidentVideo] videoPlayer.error object is null, but onerror was triggered.");
+                            }
+                            console.error(`[playIncidentVideo] Specific video error message: ${errorMsg}`);
+                            // Only alert non-abort errors
+                            if (!newVideoPlayer.error || newVideoPlayer.error.code !== MediaError.MEDIA_ERR_ABORTED) {
+                                alert(`Error loading video: ${errorMsg}\nPlease check console (F12) for more details.`);
+                            }
+                        };
+
+                        // Optional: Add other listeners (onstalled, onwaiting, etc.) to newVideoPlayer
+
+                        // 5. Set source on NEW element
+                        console.log(`[playIncidentVideo] Setting source on *new* element to: ${videoUrl}`);
+                        newVideoSource.src = videoUrl;
+
+                        // 6. Replace old player in DOM
+                        originalVideoPlayer.parentNode.replaceChild(newVideoPlayer, originalVideoPlayer);
+
+                        // 7. Call load() on NEW player
+                        console.log(`[playIncidentVideo] Calling load() on *new* player for ${filename}...`);
+                        newVideoPlayer.load();
+
+                    }, 50); // 50ms delay
+
+                }
+
+
                     function searchTable(){
                         var input = document.getElementById('searchInput').value.toLowerCase();
                         var tableBody = document.getElementById('videoTableBody');
