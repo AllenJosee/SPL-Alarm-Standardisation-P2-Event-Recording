@@ -69,9 +69,7 @@ class Camera:
     
     @staticmethod
     def from_dict(data):
-        # Expect camera_id to be in the data dictionary now
         if 'camera_id' not in data:
-            # Handle cases where old JSON might not have it (optional)
             raise ValueError("Camera data dictionary missing 'camera_id'")
         return Camera(
             data["camera_id"],
@@ -181,8 +179,9 @@ class Camera:
 
                 frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
                 frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = capture.get(cv2.CAP_PROP_FPS)
-                if fps <= 0 : fps = 15 # Default if FPS query fails
+                #fps = capture.get(cv2.CAP_PROP_FPS)
+                #if fps <= 0 : fps = 15 # Default if FPS query fails
+                fps = 15
 
                 print(f"Camera {self.camera_id}: Creating writer for {filepath} ({frame_width}x{frame_height} @ {fps} FPS)")
 
@@ -250,9 +249,7 @@ class Camera:
     def generate_video_feed(self):
         capture = self._get_or_init_capture() # Get/init camera first
         if not capture:
-            # Optional: Yield an error image or just stop
             print(f"Cannot generate feed for camera {self.camera_id}: Capture device not available.")
-            # You could yield a static "error" image frame here
             return
         while True:
             if not capture.isOpened(): # Check if capture is still valid
@@ -262,7 +259,6 @@ class Camera:
             ret, frame = capture.read() # Use the initialized capture object
             if not ret:
                 print(f"Warning: Could not read frame from camera {self.camera_id} for feed.")
-                # Decide behavior: break, continue, yield error frame?
                 time.sleep(0.1) # Avoid busy-looping
                 continue # Try reading next frame
             if self.recording:
@@ -479,18 +475,14 @@ def logout():
     global cameras
     if cameras: # Check if the global dictionary exists and is populated
         for camera_id, camera in cameras.items():
-            # Optional: Check if it's actually a Camera instance
             if isinstance(camera, Camera):
                 try:
-                    # Call the release method we added earlier
                     camera.release_capture()
                 except Exception as e:
-                    # Log potential errors during release but continue
                     print(f"Error releasing camera {camera_id} during logout: {e}")
         print("Finished attempting camera releases for logout.")
     else:
         print("No 'cameras' dictionary found or it's empty during logout.")
-    # --- End Camera Release ---
     
     session.clear()
     return redirect(url_for('login'))

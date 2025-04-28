@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+
     <title>Incident Videos</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/incident.css') }}">
 </head>
@@ -28,12 +28,12 @@
                 <a href="{{ url_for('videos', camera_id=camera_id) }}">Recorded Videos</a>
                 <a href="{{ url_for('incident_videos', camera_id=camera_id) }}">Incident Video</a>
                 <a href="{{ url_for('settings_page', camera_id=camera_id) }}">Settings</a>
-                <a href="{{ url_for('camera_list') }}">All Cameras</a> <!-- Assuming this page does not need camera_id -->
+                <a href="{{ url_for('camera_list') }}">All Cameras</a>
             </div>
-        </nav> 
+        </nav>
     </header>
 
-   
+
     <div class="container">
         <h1 style="text-align: center; padding-bottom: 10px;">Incident Videos for {{ description }}</h1>
         <div class="center-container">
@@ -41,10 +41,11 @@
                 <button type="submit" class="action-button update-button">Update Info</button>
             </form>
             <input type="text" id="searchInput" placeholder="Search for videos..." class="search-field">
-            <button onclick="searchTable()" class="action-button search-button">Search</button>
-            <button onclick="resetTable()" class="action-button cancel-button">Cancel</button>
+            <!-- Added type="button" -->
+            <button type="button" onclick="searchTable()" class="action-button search-button">Search</button>
+            <button type="button" onclick="resetTable()" class="action-button cancel-button">Cancel</button>
         </div>
-       
+
             {% if incident_videos %}
             <table class="styled-table">
                 <thead>
@@ -71,31 +72,33 @@
                     <h3>Playback</h3>
                     <video id="video-player" controls width="640">
                         <source id="video-source" src="" type="video/mp4">
+                         Your browser does not support the video tag.
                     </video>
                 </div>
+
             <script>
                 function playIncidentVideo(cameraId, incidentFolder, filename) {
                     const originalVideoPlayer = document.getElementById("video-player");
-                    // Construct the URL using the incident route pattern
+                    const playbackSection = document.querySelector('.playback-section'); // Get the section
+                    if (playbackSection) { // Check if element exists
+                         playbackSection.style.display = 'block'; // Show the playback section
+                    }
+
                     const videoUrl = `/serve_video/${cameraId}/incidents/${incidentFolder}/${filename}`;
 
                     console.log(`[playIncidentVideo] Request to play: ${filename} from folder ${incidentFolder} at ${videoUrl}`);
 
-                    // 1. Stop previous activity
                     console.log("[playIncidentVideo] Pausing existing playback & clearing src...");
                     originalVideoPlayer.pause();
                     originalVideoPlayer.querySelector('#video-source').src = '';
                     originalVideoPlayer.load();
 
-                    // 2. Delay (optional but can help stability)
                     setTimeout(() => {
                         console.log("[playIncidentVideo] Proceeding after short delay...");
 
-                        // 3. Clone player
                         const newVideoPlayer = originalVideoPlayer.cloneNode(true);
                         const newVideoSource = newVideoPlayer.querySelector('#video-source');
 
-                        // 4. Add listeners to NEW player
                         newVideoPlayer.onloadedmetadata = () => {
                             console.log(`[playIncidentVideo] Metadata loaded for ${filename}. Duration: ${newVideoPlayer.duration}`);
                             console.log(`[playIncidentVideo] Attempting to play ${filename}...`);
@@ -142,57 +145,54 @@
                                 console.error("[playIncidentVideo] videoPlayer.error object is null, but onerror was triggered.");
                             }
                             console.error(`[playIncidentVideo] Specific video error message: ${errorMsg}`);
-                            // Only alert non-abort errors
                             if (!newVideoPlayer.error || newVideoPlayer.error.code !== MediaError.MEDIA_ERR_ABORTED) {
                                 alert(`Error loading video: ${errorMsg}\nPlease check console (F12) for more details.`);
                             }
                         };
 
-                        // Optional: Add other listeners (onstalled, onwaiting, etc.) to newVideoPlayer
-
-                        // 5. Set source on NEW element
                         console.log(`[playIncidentVideo] Setting source on *new* element to: ${videoUrl}`);
                         newVideoSource.src = videoUrl;
 
-                        // 6. Replace old player in DOM
                         originalVideoPlayer.parentNode.replaceChild(newVideoPlayer, originalVideoPlayer);
 
-                        // 7. Call load() on NEW player
                         console.log(`[playIncidentVideo] Calling load() on *new* player for ${filename}...`);
                         newVideoPlayer.load();
 
                     }, 50); // 50ms delay
 
+                } 
+
+
+                // --- Search/Reset Functions ---
+                function searchTable(){
+                    var input = document.getElementById('searchInput').value.toLowerCase();
+                    var tableBody = document.getElementById('videoTableBody');
+                    var rows = tableBody.getElementsByTagName('tr');
+                    for (var i = 0; i < rows.length; i++) {
+                        var cells = rows[i].getElementsByTagName('td');
+                        var filename = cells[0].textContent.toLowerCase();
+                        var timestamp = cells[1].textContent.toLowerCase(); // Include timestamp search
+                        if (filename.includes(input) || timestamp.includes(input)) {
+                            rows[i].style.display = '';
+                        } else {
+                            rows[i].style.display = 'none';
+                        }
+                    }
                 }
 
-
-                    function searchTable(){
-                        var input = document.getElementById('searchInput').value.toLowerCase();
-                        var tableBody = document.getElementById('videoTableBody');
-                        var rows = tableBody.getElementsByTagName('tr');
-                        for (var i = 0; i < rows.length; i++) {
-                            var cells = rows[i].getElementsByTagName('td');
-                            var filename = cells[0].textContent.toLowerCase();
-                            if (filename.includes(input)) {
-                                rows[i].style.display = '';
-                            } else {
-                                rows[i].style.display = 'none';
-                            }
-                        }
+                function resetTable(){
+                    var tableBody = document.getElementById('videoTableBody');
+                    var rows = tableBody.getElementsByTagName('tr');
+                    for (var i = 0; i < rows.length; i++) {
+                        rows[i].style.display = '';
                     }
+                    document.getElementById('searchInput').value = '';
+                }
+            </script>
 
-                    function resetTable(){
-                        var tableBody = document.getElementById('videoTableBody');
-                        var rows = tableBody.getElementsByTagName('tr');
-                        for (var i = 0; i < rows.length; i++) {
-                            rows[i].style.display = '';
-                        }
-                        document.getElementById('searchInput').value = '';
-                    }
-                </script>
-                </tbody>
-            </table>
             {% else %}
-            <p>No incident videos available.</p>
+            <p class="no-videos">No incident videos available.</p>
             {% endif %}
-        </body>
+        </div> 
+</body>
+</html>

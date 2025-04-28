@@ -73,31 +73,37 @@
         <p class="no-videos">No videos recorded yet.</p>
         {% endif %}
 
-        <div class="playback-section">
-            <h3>Playback</h3>
-            <video id="video-player" controls width="640">
-                <source id="video-source" src="" type="video/mp4"></video>
-        </div> 
+        <div class="section-divider">
+            <div class="playback-section">
+                <h3>Playback</h3>
+                <video id="video-player" controls width="640">
+                    <source id="video-source" src="" type="video/mp4"></video>
+            </div> 
+        </div>
     
         <script>
-                   
             function playVideo(cameraId, filename) {
                 const originalVideoPlayer = document.getElementById("video-player");
+                const playbackSection = document.querySelector('.playback-section'); // Get the section
+                if (playbackSection) { // Check if element exists
+                     playbackSection.style.display = 'block'; // Show the playback section
+                }
+        
                 const videoUrl = `/serve_video/${cameraId}/recordings/${filename}`;
-
+        
                 console.log(`[playVideo] Request to play: ${filename} at ${videoUrl}`);
-
+        
                 console.log("[playVideo] Pausing existing playback & clearing src...");
                 originalVideoPlayer.pause();
-                originalVideoPlayer.querySelector('#video-source').src = ''; 
-                originalVideoPlayer.load(); 
-
+                originalVideoPlayer.querySelector('#video-source').src = '';
+                originalVideoPlayer.load();
+        
                 setTimeout(() => {
                     console.log("[playVideo] Proceeding after short delay...");
-
-                    const newVideoPlayer = originalVideoPlayer.cloneNode(true); 
-                    const newVideoSource = newVideoPlayer.querySelector('#video-source'); 
-
+        
+                    const newVideoPlayer = originalVideoPlayer.cloneNode(true);
+                    const newVideoSource = newVideoPlayer.querySelector('#video-source');
+        
                     newVideoPlayer.onloadedmetadata = () => {
                         console.log(`[playVideo] Metadata loaded for ${filename}. Duration: ${newVideoPlayer.duration}`);
                         console.log(`[playVideo] Attempting to play ${filename}...`);
@@ -115,18 +121,17 @@
                                 }
                             });
                     };
-
+        
                     newVideoPlayer.onerror = (e) => {
                         let errorMsg = `Unknown error loading/playing ${filename}.`;
                         console.error(`[playVideo] Video Element Error Event for ${filename}:`, e);
-
                         if (newVideoPlayer.error) {
                             console.error(`[playVideo] MediaError code: ${newVideoPlayer.error.code}`, newVideoPlayer.error);
                             switch (newVideoPlayer.error.code) {
                                 case MediaError.MEDIA_ERR_ABORTED:
                                     errorMsg = `Video loading/playback aborted (Code: ${newVideoPlayer.error.code}).`;
                                     console.warn(`[playVideo] ${errorMsg}`);
-                                    return; 
+                                    return;
                                 case MediaError.MEDIA_ERR_NETWORK:
                                     errorMsg = `Video download failed due to network error (Code: ${newVideoPlayer.error.code}). Check network connection and server logs.`;
                                     break;
@@ -145,22 +150,24 @@
                             console.error("[playVideo] videoPlayer.error object is null, but onerror was triggered.");
                         }
                          console.error(`[playVideo] Specific video error message: ${errorMsg}`);
-                         alert(`Error loading video: ${errorMsg}\nPlease check console (F12) for more details.`);
+                         if (!newVideoPlayer.error || newVideoPlayer.error.code !== MediaError.MEDIA_ERR_ABORTED) {
+                            alert(`Error loading video: ${errorMsg}\nPlease check console (F12) for more details.`);
+                         }
                     };
-
+        
                     console.log(`[playVideo] Setting source on *new* element to: ${videoUrl}`);
                     newVideoSource.src = videoUrl;
-
+        
                     originalVideoPlayer.parentNode.replaceChild(newVideoPlayer, originalVideoPlayer);
-
+        
                     console.log(`[playVideo] Calling load() on *new* player for ${filename}...`);
                     newVideoPlayer.load();
-
-                }, 50);
-
-            }
-
-
+        
+                }, 50); // End setTimeout
+        
+            } 
+        
+        
             function searchTable(){
                 var input = document.getElementById('searchInput').value.toLowerCase();
                 var tableBody = document.getElementById('videoTableBody');
@@ -176,7 +183,7 @@
                     }
                 }
             }
-
+        
             function resetTable(){
                 var tableBody = document.getElementById('videoTableBody');
                 var rows = tableBody.getElementsByTagName('tr');
