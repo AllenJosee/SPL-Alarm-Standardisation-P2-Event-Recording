@@ -206,6 +206,13 @@ button:hover {
     background-color: #e0a800;
 }
 
+.delete-button {
+    background-color: #dc3545; 
+}
+.delete-button:hover {
+    background-color: #c82333;
+}
+
 .view-button {
     color: white;
     background-color: #000000; 
@@ -311,3 +318,85 @@ button:hover {
     border-radius: 8px; 
     background-color: #000; 
   }
+
+.modal-overlay {
+    position: fixed; /* Sit on top of the page content */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* Black background with opacity */
+    z-index: 100; /* Specify a stack order */
+    display: none; /* Hidden by default */
+}
+
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center the modal */
+    background-color: #ffffff;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 101; /* Higher than overlay */
+    width: 90%;
+    max-width: 450px; /* Maximum width */
+    display: none; /* Hidden by default */
+    border: 1px solid #ccc;
+}
+
+.modal-header {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.4em;
+    color: #d9534f; /* Reddish color for warning */
+}
+
+.modal-body {
+    margin-bottom: 20px;
+    font-size: 1.1em;
+    line-height: 1.5;
+    color: #333;
+    text-align: center;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end; /* Align buttons to the right */
+    gap: 10px;
+}
+
+
+.modal-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+}
+
+.modal-button.cancel {
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+}
+.modal-button.cancel:hover {
+    background-color: #e0e0e0;
+}
+
+.modal-button.confirm-delete {
+    background-color: #d9534f; /* Red color */
+    color: white;
+}
+.modal-button.confirm-delete:hover {
+    background-color: #c9302c; /* Darker red on hover */
+}

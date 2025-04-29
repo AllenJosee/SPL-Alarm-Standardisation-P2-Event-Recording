@@ -665,8 +665,6 @@ def serve_incident_video(camera_id, incident_folder, filename):
     camera = cameras.get(camera_id)
     if not camera:
         return "Camera not found", 404
-
-    # Construct the path to the specific incident folder
     try:
         directory = os.path.abspath(os.path.join(camera.incidents_dir, incident_folder))
         print(f"Serving incident video: directory='{directory}', filename='{filename}'") # Debug log
@@ -678,6 +676,78 @@ def serve_incident_video(camera_id, incident_folder, filename):
     except Exception as e:
         print(f"Error serving incident video {filename} from {incident_folder} for camera {camera_id}: {e}")
         return "Error serving video", 500
+
+#New route for video delete
+@app.route('/delete_video/<camera_id>/<filename>', methods=['DELETE'])
+@login_required
+def delete_recorded_video(camera_id, filename):
+    camera = cameras.get(camera_id)
+    if not camera:
+        print (f"[Delete Error] Camera {camera_id} not found for deletion.")
+        return jsonify({"success": False, "error": "Camera not found"}), 404
+    
+    try: 
+        base_recording_dir = os.path.abspath(camera.recordings_dir)
+        file_path = os.path.abspath(os.path.join(base_recording_dir, filename))
+        if not file_path.startswith(base_recording_dir):
+            print(f"[Delete Error] Path traversal attempt detected or invalid filename for camera {camera_id}: {filename}")
+            return jsonify({"success": False, "error": "Invalid filename or path"}), 400
+        print(f"[Delete Request] Attempting to delete: {file_path}")
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"[Delete Success] Deleted: {file_path}")
+            return jsonify({"success": True}), 200
+        else:
+            print(f"[Delete Error] File not found: {file_path}")
+            return jsonify({"success": False, "error": "File not found"}), 404
+    except OSError as e: 
+        print(f"[Delete Error] OS error deleting {file_path}: {e}")
+        return jsonify({"success": False, "error": f"Server error deleting file: {e.strerror}"}), 500
+    except Exception as e:
+        print(f"[Delete Error] Unexpected error deleting {filename} for camera {camera_id}: {e}")
+        return jsonify({"success": False, "error": "An unexpected server error occurred"}), 500
+
+#New route for deleting incident videos
+@app.route('/delete_incident_video/<camera_id>/<incident_folder>/<filename>', methods=['DELETE'])
+@login_required
+def delete_incident_video(camera_id, incident_folder, filename):
+    camera = cameras.get(camera_id)
+    if not camera:
+        print(f"[Delete Incident Error] Camera {camera_id} not found.")
+        return jsonify({"success": False, "error": "Camera not found"}), 404
+
+    try:
+        base_incident_folder_dir = os.path.abspath(os.path.join(camera.incidents_dir, incident_folder))
+
+        if not base_incident_folder_dir.startswith(os.path.abspath(camera.incidents_dir)) or not os.path.isdir(base_incident_folder_dir):
+             print(f"[Delete Incident Error] Invalid or non-existent incident folder specified: {incident_folder} for camera {camera_id}")
+             return jsonify({"success": False, "error": "Invalid incident folder"}), 400
+
+        file_path = os.path.abspath(os.path.join(base_incident_folder_dir, filename))
+
+        if not file_path.startswith(base_incident_folder_dir):
+            print(f"[Delete Incident Error] Path traversal attempt or invalid filename within incident folder for camera {camera_id}: {filename}")
+            return jsonify({"success": False, "error": "Invalid filename or path"}), 400 # Bad Request
+
+        print(f"[Delete Incident Request] Attempting to delete: {file_path}")
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"[Delete Incident Success] Successfully deleted: {file_path}")
+        
+            return jsonify({"success": True})
+        else:
+            print(f"[Delete Incident Error] File not found: {file_path}")
+            return jsonify({"success": False, "error": "File not found"}), 404
+
+    except OSError as e:
+        print(f"[Delete Incident Error] OS error deleting {file_path}: {e}")
+        return jsonify({"success": False, "error": f"Server error deleting file: {e.strerror}"}), 500
+    except Exception as e:
+        print(f"[Delete Incident Error] Unexpected error deleting {filename} (incident) for camera {camera_id}: {e}")
+        return jsonify({"success": False, "error": "An unexpected server error occurred"}), 500
+
 
 def release_all_cameras():
     print("Releasing all camera captures on exit...")
