@@ -100,7 +100,8 @@ video, img {
     border: 2px solid #333;
     width: 640px;
     height: 480px;
-} 
+}
+
 form {
     margin-top: 10px;
 }
@@ -176,10 +177,12 @@ button:hover {
     border: 2px solid #ccc;
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    padding: 10px;
+    padding: 20px;
     background-color: white;
-    height: auto;
     text-align: center;
+    width: 100%; /* Or set a specific max-width */
+    max-width: 640px; /* Example max width */
+    max-height: 510px;
 }
 
 .live-stream img {
@@ -294,4 +297,104 @@ button:hover {
 
 .action-button:hover {
     background-color: #0056b3;
+}
+
+
+/*.video-feed-container {
+    position: relative;
+    width: 100%; 
+    max-width: 720px; 
+    min-height: 486px; 
+    margin: auto auto; 
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; 
+    border-radius: 8px; 
+  }*/
+
+.video-feed-container {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    margin: 20px auto;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #ccc; /* Keep the container border */
+
+    height: 0;
+    padding-top: 56.25%; /* Adjust % for 16:9 or 4:3 etc. */
+    background-color: #e0e0e0;
+}
+
+.video-image-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Optional: If border was thick, add slight padding here */
+    /* padding: 2px; */
+    /* box-sizing: border-box; */
+}
+  
+#video-feed-img {
+    /* Image now fills the WRAPPER */
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none; /* IMPORTANT: No border on the image itself */
+    /* Apply radius here if you want image corners rounded INSIDE border */
+     border-radius: 6px; /* Slightly smaller than container radius */
+    object-fit: cover;
+  }
+  
+.spinner {
+    /* Spinner will be visible by default, hidden by JS */
+    border: 6px solid #f3f3f3; /* Light grey border */
+    border-top: 6px solid #3498db; /* Blue color for top border */
+    border-radius: 50%; /* Make it circular */
+    width: 100px; /* Spinner size */
+    height: 100px; /* Spinner size */
+    animation: spin 1s linear infinite; /* Animation properties */
+    position: absolute; /* Position relative to the container */
+    /* Centering is handled by flexbox on parent now,
+       but keep this as fallback or if you remove flexbox */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10; /* Ensure spinner is above potential background */
+  }
+  
+  /* Keyframes for the spinning animation */
+  @keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  
+
+.video-feed-container.recording {
+    border: 5px solid red; /* Adjust thickness as needed */
+    /* Padding might need adjustment if border adds too much space */
+    /* padding: 1px; */ /* Example if border affects layout */
+    box-sizing: border-box; /* Include border in element's total width/height */
+}
+  
+.video-feed-container.error {
+    background-color: #f8d7da; /* Light red background */
+    border-color: #f5c6cb;
+  }
+.video-feed-container.error::after {
+   content: "⚠ Feed Error";
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   color: #721c24;
+   font-weight: bold;
+  }
+.video-feed-container.error .video-image-wrapper {
+    display: none;
 }

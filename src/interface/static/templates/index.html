@@ -29,7 +29,7 @@
                 <a href="{{ url_for('videos', camera_id=camera_id) }}">Recorded Videos</a>
                 <a href="{{ url_for('incident_videos', camera_id=camera_id) }}">Incident Video</a>
                 <a href="{{ url_for('settings_page', camera_id=camera_id) }}">Settings</a>
-                <a href="{{ url_for('camera_list') }}">All Cameras</a> <!-- Assuming this page does not need camera_id -->
+                <a href="{{ url_for('camera_list') }}">All Cameras</a> 
             </div>
         </nav> 
     </header>
@@ -40,7 +40,18 @@
         <h1 style="text-align: center; padding: 10px;" >{{ description }}</h1>
             <div class="stream-container">
                 <div class="live-stream">
-                    <img src="{{ url_for('video_feed', camera_id=camera_id) }}" alt="Video Feed" />                    <div class="status-circle" id="status-circle"></div>
+                    <div class="video-feed-container">
+                        <div class="video-image-wrapper">
+                            <img id="video-feed-img"
+                                src="{{ url_for('video_feed', camera_id=camera_id) }}"
+                                alt="Live feed for camera {{ camera_id }}"
+                                onerror="handleFeedError()"
+                                onload="handleFeedLoad()">
+                       </div>
+                       <div class="spinner" id="feed-spinner"></div>
+                   </div>
+                    </div>                    
+                    <div class="status-circle" id="status-circle"></div>
                     <div id="status-message" class="status-message"></div>
                 </div>
             </div>
@@ -63,25 +74,91 @@
 
             <script>
                 let incidentCount = 0;
+                const feedContainerForStatus = document.querySelector('.video-feed-container');
 
                 function showRecordingStatus() {
-                const statusCircle = document.getElementById('status-circle');
-                statusCircle.className = 'status-circle recording';
-                document.getElementById('status-message').innerText = 'Recording...';
-                }
-                
-                function hideStatus() {
+                    // Keep status circle/message logic if you still use it
                     const statusCircle = document.getElementById('status-circle');
-                    statusCircle.className = 'status-circle';
-                    document.getElementById('status-message').innerText = 'Recording stopped.';
+                    if (statusCircle) statusCircle.className = 'status-circle recording';
+                    const statusMessage = document.getElementById('status-message');
+                    if (statusMessage) statusMessage.innerText = 'Recording...';
+
+                    // Add recording class to the CONTAINER for the border
+                    if (feedContainerForStatus) {
+                        feedContainerForStatus.classList.add('recording');
+                    }
                 }
-                
+
+                function hideStatus() { // Renamed from hideStatus for clarity if needed elsewhere, or keep as is
+                    // Keep status circle/message logic if you still use it
+                    const statusCircle = document.getElementById('status-circle');
+                    if (statusCircle) statusCircle.className = 'status-circle';
+                    const statusMessage = document.getElementById('status-message');
+                    if (statusMessage) statusMessage.innerText = 'Recording stopped.'; // Or clear it
+
+                    // Remove recording class from the CONTAINER
+                    if (feedContainerForStatus) {
+                        feedContainerForStatus.classList.remove('recording');
+                    }
+                }
+
                 function showIncidentStatus() {
+                    // Keep status circle/message logic if you still use it
                     const statusCircle = document.getElementById('status-circle');
-                    statusCircle.className = 'status-circle incident';
+                    if (statusCircle) statusCircle.className = 'status-circle incident';
                     incidentCount++;
-                    document.getElementById('status-message').innerText = `Incident simulated. Count: ${incidentCount}`;
+                    const statusMessage = document.getElementById('status-message');
+                    if (statusMessage) statusMessage.innerText = `Incident simulated. Count: ${incidentCount}`;
                     console.log('Incident status shown');
+                    // Maybe remove recording border if incident stops recording?
+                    // if (feedContainerForStatus) {
+                    //    feedContainerForStatus.classList.remove('recording');
+                    // }
+        }
+            </script>
+            <script>
+                const feedSpinner = document.getElementById('feed-spinner');
+                const videoFeedImg = document.getElementById('video-feed-img');
+                const feedContainer = document.querySelector('.video-feed-container');
+        
+                function handleFeedLoad() {
+                    console.log("Video feed loaded (first frame). Hiding spinner.");
+                    if (feedSpinner) {
+                        feedSpinner.style.display = 'none';
+                    }
+                    if (videoFeedImg) {
+                        videoFeedImg.style.display = 'block'; // *** Explicitly ensure image is displayed ***
+                        videoFeedImg.classList.remove('error-state'); // Remove error class if re-loading after error
+                    }
+                    if (feedContainer) {
+                        feedContainer.style.background = 'none';
+                        // Keep padding-top if using that method
+                        // feedContainer.style.minHeight = 'auto'; // Not needed with aspect ratio methods
+                        feedContainer.classList.remove('error');
+                    }
+                }
+        
+                function handleFeedError() {
+                    console.error("Error loading video feed. Hiding spinner.");
+                    if (feedSpinner) {
+                        feedSpinner.style.display = 'none';
+                    }
+                    if (videoFeedImg) {
+                        videoFeedImg.style.display = 'none'; // Hide broken image
+                        videoFeedImg.classList.add('error-state'); // Add error class
+                    }
+                if (feedContainer) {
+                        feedContainer.classList.add('error');
+                        // Ensure container keeps size on error if using padding-top
+                        // feedContainer.style.paddingTop = '56.25%'; // Re-assert if needed
+                }
+                }
+
+                // Initial check remains the same
+                if (videoFeedImg.complete && videoFeedImg.naturalHeight !== 0) {
+                    handleFeedLoad();
+                } else if (videoFeedImg.complete) {
+                handleFeedError(); // Treat complete but no height as error
                 }
             </script>
     </div>
