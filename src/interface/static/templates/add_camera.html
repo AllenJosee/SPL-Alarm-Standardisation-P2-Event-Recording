@@ -26,7 +26,7 @@
             {% endif %}
             <form class="login-form" method="POST">
                 <label for="description"> Camera Name/Description : </label>
-                <input type="text" name="description" placeholder="Eg. Front Gate" id="description">
+                <input type="text" name="description" placeholder="Eg. Front Gate" id="description" required>
                 <button type="submit" class="login-button">Add Camera</button>
                 <a href="{{ url_for('camera_list') }}" class="login-button">Cancel</a>  
             </form>

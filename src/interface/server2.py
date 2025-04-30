@@ -213,20 +213,45 @@ class Camera:
                     time.sleep(0.1) 
             out.release()
 
-            current_videos = self.load_videos_from_folder(self.recordings_dir)
-            if len(current_videos) > self.settings["max_videos"]:
-                 # Sort files by creation time to find the oldest
-                 try: 
-                    all_files = [(f, os.path.getctime(os.path.join(self.recordings_dir, f)))
-                                 for f in os.listdir(self.recordings_dir) if f.endswith(".mp4")]
-                    all_files.sort(key=lambda x: x[1]) # Sort by timestamp (index 1)
-                    if all_files:
-                        oldest_video_filename = all_files[0][0] # Get filename of oldest
-                        os.remove(os.path.join(self.recordings_dir, oldest_video_filename))
-                        print(f"Removed oldest video: {oldest_video_filename}") # Optional log
-                 except Exception as e:
-                    print(f"Error pruning videos for camera {self.camera_id}: {e}")
+            try:
+                max_videos = self.settings.get("max_videos", 5)
+                videos_with_ts = []
+                if os.path.isdir(self.recordings_dir): # Check if directory exists first
+                    for f in os.listdir(self.recordings_dir):
+                        if f.endswith(".mp4"):
+                            filepath = os.path.join(self.recordings_dir, f)
+                            try:
+                                ts = os.path.getctime(filepath)
+                                videos_with_ts.append({'path': filepath, 'timestamp': ts, 'filename': f})
+                            except FileNotFoundError:
+                                print(f"[Pruning Warning Camera {self.camera_id}] File not found while getting timestamp: {filepath}")
+                            except Exception as e:
+                                 print(f"[Pruning Warning Camera {self.camera_id}] Error getting timestamp for {filepath}: {e}")
+                else:
+                    print(f"[Pruning Warning Camera {self.camera_id}] Recordings directory not found: {self.recordings_dir}")
 
+                num_videos = len(videos_with_ts)
+                print(f"[Pruning Check Camera {self.camera_id}] Found {num_videos} videos. Max allowed: {max_videos}")
+
+                if num_videos > max_videos:
+                    num_to_delete = num_videos - max_videos
+                    print(f"[Pruning Camera {self.camera_id}] Need to delete {num_to_delete} oldest video(s).")
+                    videos_with_ts.sort(key=lambda x: x['timestamp'])
+
+                    for i in range(num_to_delete):
+                        if i < len(videos_with_ts): 
+                            video_to_remove = videos_with_ts[i] 
+                            try:
+                                os.remove(video_to_remove['path'])
+                                print(f"[Pruning Camera {self.camera_id}] Removed oldest video: {video_to_remove['filename']}")
+                            except OSError as e:
+                                print(f"[Pruning Error Camera {self.camera_id}] Failed to remove {video_to_remove['path']}: {e}")
+                        else:
+                            print(f"[Pruning Warning Camera {self.camera_id}] Index {i} out of bounds during deletion loop.")
+                            break 
+
+            except Exception as e:
+                print(f"[Pruning Error Camera {self.camera_id}] An unexpected error occurred during pruning setup/execution: {e}")
     
     def simulate_incident(self):
         incident_timestamp = time.strftime("%Y%m%d-%H%M%S")
