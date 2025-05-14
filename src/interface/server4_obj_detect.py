@@ -35,8 +35,7 @@ class Camera:
 
         # --- YOLO Detection Attributes ---
         self.yolo_model = None
-        self.yolo_class_names_dict = {}  # Stores {class_id: class_name}
-        # IMPORTANT: Adjust this path if your Flask app's root directory is different
+        self.yolo_class_names_dict = {} 
         # This assumes 'helmet_detection_runs' is at the same level as your main Flask .py file
         self.yolo_model_path = os.path.abspath(os.path.join(
             'helmet_detection_runs', 'yolov8s_helmet_head_exp16', 'weights', 'best.pt'
@@ -51,13 +50,11 @@ class Camera:
         self.yolo_box_thickness = 2
         self.yolo_text_thickness = 2
         
-        # Flag to control if detection should be attempted.
-        # Set to False if model loading fails.
         self.detection_enabled = True # Try to enable by default
         self.yolo_model_loaded_successfully = False
 
         self.frame_counter_for_detection = 0  # Counts frames since last detection
-        self.detection_skip_interval = 3      # Detect every Nth frame (e.g., 3 means detect, skip 2, detect)
+        self.detection_skip_interval = 1      # Detect every Nth frame
         self.last_known_detections = []
 
         os.makedirs(recordings_dir, exist_ok=True)
@@ -67,7 +64,6 @@ class Camera:
     def _init_yolo_model(self):
         """Initializes the YOLO model. Called lazily."""
         if self.yolo_model_loaded_successfully or not self.detection_enabled:
-            # Model already loaded or detection is explicitly disabled for this instance
             return
 
         absolute_model_path = self.yolo_model_path
@@ -466,8 +462,7 @@ class Camera:
         print(f"Successfully using shared capture for LIVE FEED on camera {self.camera_id}. Active clients: {self.active_feed_clients}")
 
         # Reset frame counter for this new feed session if desired,
-        # or let it persist if multiple clients might view the same 'detection stream'
-        self.frame_counter_for_detection = 0 # Optional: Reset for each new client connection
+        self.frame_counter_for_detection = 0
 
         try:
             while True:
@@ -492,14 +487,10 @@ class Camera:
 
                 # --- Perform YOLO Detection (conditionally) ---
                 if self.detection_enabled and self.yolo_model_loaded_successfully and self.yolo_model:
-                    
-                    # Check if it's time to perform a new detection
                     perform_new_detection = (self.frame_counter_for_detection % self.detection_skip_interval == 0)
 
                     if perform_new_detection:
-                        # Time to run actual inference
-                        # print(f"Cam {self.camera_id}: Performing detection on frame {self.frame_counter_for_detection}") # Debug
-                        self.last_known_detections = [] # Clear previous detections
+                        self.last_known_detections = [] 
                         results = self.yolo_model(frame, stream=True, verbose=False)
 
                         for r in results:
@@ -520,19 +511,13 @@ class Camera:
                                         "label": label_text,
                                         "color": color
                                     })
-                    # else:
-                        # print(f"Cam {self.camera_id}: Skipping detection on frame {self.frame_counter_for_detection}, using last known.") # Debug
-
-                    # --- Always Draw based on last_known_detections ---
+               
                     for det in self.last_known_detections:
                         x1_coord, y1_coord, x2_coord, y2_coord = det["coords"]
                         label_to_draw = det["label"]
                         box_color = det["color"]
 
-                        # Draw bounding box
                         cv2.rectangle(frame, (x1_coord, y1_coord), (x2_coord, y2_coord), box_color, self.yolo_box_thickness)
-
-                        # Prepare label text and background
                         (label_width, label_height), baseline = cv2.getTextSize(label_to_draw,
                                                                                 cv2.FONT_HERSHEY_SIMPLEX,
                                                                                 self.yolo_font_scale,
