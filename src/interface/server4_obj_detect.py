@@ -38,7 +38,7 @@ class Camera:
         self.yolo_class_names_dict = {} 
         # This assumes 'helmet_detection_runs' is at the same level as your main Flask .py file
         self.yolo_model_path = os.path.abspath(os.path.join(
-            'helmet_detection_runs', 'yolov8s_helmet_head_exp16', 'weights', 'best.pt'
+            'helmet_detection_runs', 'yolov8s_helmet_head_exp17', 'weights', 'best.pt'
         ))
         self.yolo_confidence_threshold = 0.4
         self.yolo_class_colors = {
