@@ -1,0 +1,29 @@
+<!-- latest_recordings.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Latest Recordings</title>
+</head>
+<body>
+    <h1>Latest Recordings</h1>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Camera ID</th>
+            <th>Filename</th>
+            <th>Timestamp</th>
+            <th>Path</th>
+        </tr>
+        {% for recording in recordings %}
+        <tr>
+            <td>{{ recording[0] }}</td>
+            <td>{{ recording[1] }}</td>
+            <td>{{ recording[2] }}</td>
+            <td>{{ recording[3] }}</td>
+            <td>{{ recording[4] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

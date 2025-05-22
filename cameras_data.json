@@ -1,0 +1,10 @@
+{
+  "1": {
+    "camera_id": "1",
+    "recordings_dir_rel": "src/recordings/camera1",
+    "incidents_dir_rel": "src/incidents/camera1",
+    "settings_file_rel": "src/settings_camera1.json",
+    "description": "Cam One",
+    "device_index": 0
+  }
+}
