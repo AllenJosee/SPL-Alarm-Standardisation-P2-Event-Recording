@@ -1,27 +1,18 @@
-#Cameras only initialized when details page is chosen
-#Very fast initial load time, but camera initialization is delayed until the details page is loaded.
-#Log out or stopping program will relase all cameras
-#Potential issues with all camera feed view?
+#Camera 1 will auto record before the log in, user can navigate to the details page as usual.
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash
 import os
 import cv2
 import json
-from threading import Thread
+from threading import Thread, Event, Lock
 import time
 import shutil
 from functools import wraps
 import atexit
-from picamera2 import Picamera2, Preview
-import numpy as np
-
 
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
 settings_file = "src/settings.json"
-
-
-
 
 class Camera:
     #device index=0 -> webcam
@@ -30,56 +21,89 @@ class Camera:
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
-        self.description = description  # Add description attribute
+        self.description = description 
         self.device_index = device_index
-        self.camera = None
-        self.recording = False
         
+        self.capture = None 
+        self.capture_lock = Lock() 
+        self.active_feed_clients = 0 
+
+        self.recording = False
+        self._stop_recording_event = Event()
+        self.recording_thread = None
+
         os.makedirs(recordings_dir, exist_ok=True)
         os.makedirs(incidents_dir, exist_ok=True)
         self.load_settings()
 
-    '''
-    def _get_or_init_capture(self):
-        """Initializes and returns the cv2.VideoCapture object if not already done."""
-        if self.camera is None:
+    
+    def _get_or_init_recording_capture(self): 
+        if self.recording_capture is None or not self.recording_capture.isOpened(): 
+            if self.recording_capture is not None:
+                self.recording_capture.release()
+                self.recording_capture = None
+                print(f"Released stale recording capture for camera {self.camera_id} before re-initializing.")
+            
             try:
-                print(f"Initializing cv2.VideoCapture for camera {self.camera_id} (device: {self.device_index})...")
-                self.camera = cv2.VideoCapture(self.device_index)
-                
-                #self.camera = picamera2(self.device_index)
-                
-                if not self.camera.isOpened():
-                    print(f"Error: Could not open video device {self.device_index} for camera {self.camera_id}")
-                    self.camera = None # Reset if opening failed
+                print(f"Initializing cv2.VideoCapture for RECORDING - camera {self.camera_id} (device: {self.device_index})...")
+                self.recording_capture = cv2.VideoCapture(self.device_index)
+                if not self.recording_capture.isOpened():
+                    print(f"Error: Could not open video device {self.device_index} for RECORDING on camera {self.camera_id}")
+                    self.recording_capture = None
                 else:
-                     print(f"Successfully opened camera {self.camera_id}")
+                    print(f"Successfully opened camera {self.camera_id} for RECORDING.")
             except Exception as e:
-                print(f"Exception initializing cv2.VideoCapture for camera {self.camera_id}: {e}")
-                self.camera = None
-        return self.camera
-        '''
-    def _get_or_init_capture(self):
-        """Initializes and returns the Picamera2 object if not already done."""
-        if self.camera is None:
-            try:
-                print(f"Initializing Picamera2 for camera {self.camera_id}...")
-                self.camera = Picamera2()
-                self.camera.configure(self.camera.create_video_configuration())  # Configure for video
-                self.camera.start()  # Start the camera
-                print(f"Successfully opened camera {self.camera_id}")
-            except Exception as e:
-                print(f"Exception initializing Picamera2 for camera {self.camera_id}: {e}")
-                self.camera = None
-        return self.camera
+                print(f"Exception initializing cv2.VideoCapture for RECORDING on camera {self.camera_id}: {e}")
+                self.recording_capture = None
+        return self.recording_capture
+    
+    #New fix 8/5/25
+    def _ensure_capture_initialized(self):
+        """Initializes or returns the existing capture object. Protected by lock."""
+        with self.capture_lock:
+            if self.capture is None or not self.capture.isOpened():
+                if self.capture is not None: 
+                    print(f"Releasing stale capture for camera {self.camera_id} before re-initializing.")
+                    self.capture.release()
+                    self.capture = None
+                try:
+                    print(f"Initializing cv2.VideoCapture for camera {self.camera_id} (device: {self.device_index})...")
+                    self.capture = cv2.VideoCapture(self.device_index)
+                    if not self.capture.isOpened():
+                        print(f"Error: Could not open video device {self.device_index} for camera {self.camera_id}")
+                        self.capture = None
+                    else:
+                        print(f"Successfully opened camera {self.camera_id}.")
+                except Exception as e:
+                    print(f"Exception initializing cv2.VideoCapture for camera {self.camera_id}: {e}")
+                    self.capture = None
+            return self.capture
         
+    def _release_capture_if_unused(self):
+        """Releases the capture object ONLY if not recording AND no active feed clients."""
+        with self.capture_lock:
+            if self.capture is not None and self.capture.isOpened():
+                if not self.recording and self.active_feed_clients == 0:
+                    print(f"Releasing capture for camera {self.camera_id} (no recording, no feed clients).")
+                    self.capture.release()
+                    self.capture = None
+                else:
+                    print(f"Capture for camera {self.camera_id} NOT released. Recording: {self.recording}, Feed Clients: {self.active_feed_clients}")
+
+    def release_capture(self): # Called by atexit or logout for a FULL shutdown of this camera
+        print(f"FULL release_capture called for camera {self.camera_id}")
+        if self.recording:
+            self.stop_recording_logic(called_from_release_all=True) # Will handle thread and flags
         
-    def release_capture(self):
-        """Releases the Picamera2 object if it's initialized."""
-        if self.camera is not None:
-            print(f"Releasing capture for camera {self.camera_id}")
-            self.camera.close()
-            self.camera = None
+        # Even if not recording, ensure capture is released
+        with self.capture_lock:
+            if self.capture is not None and self.capture.isOpened():
+                print(f"Force releasing capture for camera {self.camera_id} during full shutdown.")
+                self.capture.release()
+                self.capture = None
+        self.active_feed_clients = 0 # Reset feed clients on full release
+        print(f"All resources for camera {self.camera_id} should be released after full shutdown sequence.")
+
 
     def to_dict(self):
         return {
@@ -179,94 +203,179 @@ class Camera:
         with open(self.settings_file, "w") as f:
             json.dump(self.settings, f)
 
-    def record_video(self):
-        capture = self._get_or_init_capture()  # Get/init camera first
-        if not capture:
-            print(f"Cannot start recording for camera {self.camera_id}: Capture device not available.")
-            self.recording = False  # Ensure recording stops if init failed
-            return  # Exit if camera couldn't be opened
 
-        while self.recording:
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"cam{self.camera_id}_{timestamp}.mp4"
-            filepath = os.path.join(self.recordings_dir, filename)
-            print(f"Attempting to record to {filepath}")  # Debugging line
-            try:
-                # Read one frame to get frame size for VideoWriter
-                frame = self.camera.capture_array()  # Capture a frame
-                if frame is None:
-                    print(f"Error: Failed to capture frame from camera {self.camera_id}.")
+    def start_recording_thread(self):
+        if self.recording and self.recording_thread and self.recording_thread.is_alive():
+            print(f"Camera {self.camera_id} is already recording.")
+            return self.recording_thread
+
+        print(f"Attempting to start recording thread for camera {self.camera_id}...")
+        if self._ensure_capture_initialized(): # This gets or creates self.capture
+            self.recording = True
+            self._stop_recording_event.clear()
+            
+            if self.recording_thread and self.recording_thread.is_alive():
+                print(f"Warning: Previous recording thread for {self.camera_id} still alive. Joining...")
+                self.recording_thread.join(timeout=0.5)
+
+            self.recording_thread = Thread(target=self.record_video, name=f"RecordThread-{self.camera_id}")
+            self.recording_thread.daemon = True
+            self.recording_thread.start()
+            print(f"Recording thread started for camera {self.camera_id}.")
+            return self.recording_thread
+        else:
+            print(f"Failed to initialize capture for recording on camera {self.camera_id}. Recording not started.")
+            self.recording = False
+            return None
+
+    def stop_recording_logic(self, called_from_release_all=False):
+        print(f"stop_recording_logic called for camera {self.camera_id}. From release_all: {called_from_release_all}")
+        if not self.recording and not (self.recording_thread and self.recording_thread.is_alive()):
+            print(f"Camera {self.camera_id} not actively recording or thread inactive.")
+            if not called_from_release_all:
+                self._release_capture_if_unused() # Try to release main capture if no one is using it
+            return
+
+        self.recording = False # Signal the loop first
+        self._stop_recording_event.set()
+
+        if self.recording_thread and self.recording_thread.is_alive():
+            print(f"Waiting for recording thread {self.camera_id} to finish...")
+            self.recording_thread.join(timeout=2.0)
+            if self.recording_thread.is_alive():
+                print(f"Warning: Recording thread {self.camera_id} did not exit cleanly after 2 seconds.")
+        self.recording_thread = None
+        print(f"Recording thread for {self.camera_id} stopped/joined.")
+
+        if not called_from_release_all:
+            self._release_capture_if_unused() # Attempt to release main capture
+        
+        print(f"Recording stopped for camera {self.camera_id}.")
+
+    def record_video(self):
+        current_capture_for_thread = self._ensure_capture_initialized() # Get the shared capture
+        if not current_capture_for_thread or not current_capture_for_thread.isOpened():
+            print(f"Record_video: Main capture 'self.capture' not available or not open for cam {self.camera_id}. Exiting thread.")
+            self.recording = False # Ensure state is correct
+            return
+        
+        print(f"Record_video loop started for camera {self.camera_id} using shared capture.")
+        while self.recording and not self._stop_recording_event.is_set():
+            with self.capture_lock: # Protect reading from the shared capture
+                if not self.capture or not self.capture.isOpened():
+                    print(f"Error: Camera {self.camera_id} SHARED capture became unopened. Stopping recording.")
                     self.recording = False
                     break
-
-                height, width = frame.shape[:2]
-
-                # Define the codec and create VideoWriter object
-                fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for mp4
-                fps = 15  # Adjust as needed
-                out = cv2.VideoWriter(filepath, fourcc, fps, (width, height))
-
-                start_time = time.time()
-                print(f"Recording started. Capturing frames at {fps} FPS for {self.settings.get('video_duration', 5)} seconds.")
-
-                while self.recording and (time.time() - start_time) < self.settings.get("video_duration", 5):
-                    frame = self.camera.capture_array()  # Capture frame (RGB)
-                    if frame is None:
-                        print(f"Warning: Could not read frame from camera {self.camera_id} during recording.")
-                        time.sleep(0.1)
+                
+                # Create VideoWriter inside the lock to ensure capture is good
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                filename = f"cam{self.camera_id}_{timestamp}.mp4"
+                filepath = os.path.join(self.recordings_dir, filename)
+                fourcc = cv2.VideoWriter_fourcc(*"avc1")
+                out = None
+                
+                try:
+                    frame_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    frame_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    if frame_width == 0 or frame_height == 0:
+                        print(f"Error: Invalid frame dimensions ({frame_width}x{frame_height}) for camera {self.camera_id}. Skipping segment.")
+                        time.sleep(1)
+                        continue 
+                    fps = 15
+                    out = cv2.VideoWriter(filepath, fourcc, fps, (frame_width, frame_height))
+                    if not out.isOpened():
+                        print(f"Error: Could not open VideoWriter for {filepath} on camera {self.camera_id}. Skipping segment.")
+                        time.sleep(1)
                         continue
+                except Exception as e:
+                    print(f"Error creating VideoWriter for {filepath} on camera {self.camera_id}: {e}")
+                    time.sleep(1)
+                    continue
 
-                    # Convert RGB frame to BGR for OpenCV processing
-                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                    out.write(frame_bgr)  # Write the frame to the video file
+            # VideoWriter created successfully, now read frames and write
+            # The lock is released here, frame reading happens outside the writer creation lock
+            if out and out.isOpened():
+                frame_count = 0
+                total_frames = int(fps * self.settings.get("video_duration", 5))
+                
+                while self.recording and not self._stop_recording_event.is_set() and frame_count < total_frames:
+                    frame_read_successfully = False
+                    frame = None
+                    with self.capture_lock: # Lock for reading the frame
+                        if not self.capture or not self.capture.isOpened():
+                            print(f"Error: Camera {self.camera_id} SHARED capture lost during segment write.")
+                            self.recording = False; break
+                        ret, frame_data = self.capture.read()
+                        if ret:
+                            frame = frame_data
+                            frame_read_successfully = True
+                    
+                    if self._stop_recording_event.is_set(): break
 
-                out.release()  # Release the VideoWriter
-                print(f"Camera {self.camera_id}: Finished recording to {filepath}")
+                    if frame_read_successfully and frame is not None:
+                        out.write(frame)
+                        frame_count += 1
+                    elif self.recording :
+                        print(f"Warning: Could not read frame from camera {self.camera_id} (shared capture) during RECORDING segment.")
+                        time.sleep(0.1) 
+                
+                out.release() # Release writer outside lock
 
-            except Exception as e:
-                print(f"Error during recording for {filepath}: {e}")
-                self.recording = False  # Stop recording on error
-        
+            if frame_count > 0:
+                    print(f"Finished segment: {filename} for camera {self.camera_id} ({frame_count} frames)")
+            else:
+                print(f"Segment {filename} for camera {self.camera_id} had 0 frames. Possible issue.")
+                # Optionally delete empty file
+                if os.path.exists(filepath) and os.path.getsize(filepath) == 0:
+                    try:
+                        os.remove(filepath)
+                        print(f"Removed 0-byte file: {filepath}")
+                    except Exception as e_del:
+                        print(f"Error removing 0-byte file {filepath}: {e_del}")
+
             try:
-                    max_videos = self.settings.get("max_videos", 5)
-                    videos_with_ts = []
-                    if os.path.isdir(self.recordings_dir): # Check if directory exists first
-                        for f in os.listdir(self.recordings_dir):
-                            if f.endswith(".mp4"):
-                                filepath = os.path.join(self.recordings_dir, f)
-                                try:
-                                    ts = os.path.getctime(filepath)
-                                    videos_with_ts.append({'path': filepath, 'timestamp': ts, 'filename': f})
-                                except FileNotFoundError:
-                                    print(f"[Pruning Warning Camera {self.camera_id}] File not found while getting timestamp: {filepath}")
-                                except Exception as e:
-                                     print(f"[Pruning Warning Camera {self.camera_id}] Error getting timestamp for {filepath}: {e}")
-                    else:
-                        print(f"[Pruning Warning Camera {self.camera_id}] Recordings directory not found: {self.recordings_dir}")
+                max_videos = self.settings.get("max_videos", 5)
+                videos_with_ts = []
+                if os.path.isdir(self.recordings_dir): # Check if directory exists first
+                    for f in os.listdir(self.recordings_dir):
+                        if f.endswith(".mp4"):
+                            filepath = os.path.join(self.recordings_dir, f)
+                            try:
+                                ts = os.path.getctime(filepath)
+                                videos_with_ts.append({'path': filepath, 'timestamp': ts, 'filename': f})
+                            except FileNotFoundError:
+                                print(f"[Pruning Warning Camera {self.camera_id}] File not found while getting timestamp: {filepath}")
+                            except Exception as e:
+                                 print(f"[Pruning Warning Camera {self.camera_id}] Error getting timestamp for {filepath}: {e}")
+                else:
+                    print(f"[Pruning Warning Camera {self.camera_id}] Recordings directory not found: {self.recordings_dir}")
 
-                    num_videos = len(videos_with_ts)
-                    print(f"[Pruning Check Camera {self.camera_id}] Found {num_videos} videos. Max allowed: {max_videos}")
+                num_videos = len(videos_with_ts)
+                print(f"[Pruning Check Camera {self.camera_id}] Found {num_videos} videos. Max allowed: {max_videos}")
 
-                    if num_videos > max_videos:
-                        num_to_delete = num_videos - max_videos
-                        print(f"[Pruning Camera {self.camera_id}] Need to delete {num_to_delete} oldest video(s).")
-                        videos_with_ts.sort(key=lambda x: x['timestamp'])
+                if num_videos > max_videos:
+                    num_to_delete = num_videos - max_videos
+                    print(f"[Pruning Camera {self.camera_id}] Need to delete {num_to_delete} oldest video(s).")
+                    videos_with_ts.sort(key=lambda x: x['timestamp'])
 
-                        for i in range(num_to_delete):
-                            if i < len(videos_with_ts): 
-                                video_to_remove = videos_with_ts[i] 
-                                try:
-                                    os.remove(video_to_remove['path'])
-                                    print(f"[Pruning Camera {self.camera_id}] Removed oldest video: {video_to_remove['filename']}")
-                                except OSError as e:
-                                    print(f"[Pruning Error Camera {self.camera_id}] Failed to remove {video_to_remove['path']}: {e}")
-                            else:
-                                print(f"[Pruning Warning Camera {self.camera_id}] Index {i} out of bounds during deletion loop.")
-                                break 
+                    for i in range(num_to_delete):
+                        if i < len(videos_with_ts): 
+                            video_to_remove = videos_with_ts[i] 
+                            try:
+                                os.remove(video_to_remove['path'])
+                                print(f"[Pruning Camera {self.camera_id}] Removed oldest video: {video_to_remove['filename']}")
+                            except OSError as e:
+                                print(f"[Pruning Error Camera {self.camera_id}] Failed to remove {video_to_remove['path']}: {e}")
+                        else:
+                            print(f"[Pruning Warning Camera {self.camera_id}] Index {i} out of bounds during deletion loop.")
+                            break 
 
             except Exception as e:
                 print(f"[Pruning Error Camera {self.camera_id}] An unexpected error occurred during pruning setup/execution: {e}")
-    
+
+            if self.recording and not self._stop_recording_event.is_set():
+                 time.sleep(0.01) # Short sleep between segments
+        print(f"Record_video loop EXITED for camera {self.camera_id}. Final recording state: {self.recording}")
 
     def simulate_incident(self):
         incident_timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -287,37 +396,60 @@ class Camera:
 
     #Video Feed
     def generate_video_feed(self):
-        capture = self._get_or_init_capture()  # Get/init camera first
-        if not capture:
-            print(f"Cannot generate feed for camera {self.camera_id}: Capture device not available.")
-            return
-        while True:
-            if self.camera is None:
-                print(f"Error: Camera {self.camera_id} capture lost during feed generation.")
-                break  # Exit the loop if camera fails
+        print(f"Attempting to generate live feed for camera {self.camera_id}")
+        
+        # Ensure the shared capture is initialized
+        local_capture_ref = self._ensure_capture_initialized()
+        
+        if not local_capture_ref or not local_capture_ref.isOpened():
+            print(f"Error: Could not get/initialize shared capture for LIVE FEED on camera {self.camera_id}")
+            return 
 
-            frame = self.camera.capture_array()  # Capture frame (RGB)
-            if frame is None:
-                print(f"Warning: Could not read frame from camera {self.camera_id} for feed.")
-                time.sleep(0.1)  # Avoid busy-looping
-                continue  # Try reading next frame
+        with self.capture_lock: # Increment client count under lock
+            self.active_feed_clients += 1
+        print(f"Successfully using shared capture for LIVE FEED on camera {self.camera_id}. Active clients: {self.active_feed_clients}")
 
-            # Convert RGB frame to BGR for OpenCV processing
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        try:
+            while True: # Loop as long as client is connected
+                frame = None
+                frame_available = False
+                with self.capture_lock: # Lock for reading from shared capture
+                    if not self.capture or not self.capture.isOpened():
+                        print(f"Error: Camera {self.camera_id} SHARED capture lost during LIVE FEED.")
+                        break
+                    ret, frame_data = self.capture.read()
+                    if ret:
+                        frame = frame_data.copy() 
+                        frame_available = True
+                
+                if not frame_available:
+                    print(f"Warning: Could not read frame from camera {self.camera_id} (shared capture) for LIVE FEED.")
+                    time.sleep(0.1)
+                    continue
 
-            if self.recording:
-                frame_bgr = cv2.rectangle(
-                    frame_bgr,
-                    (0, 0),
-                    (frame_bgr.shape[1] - 1, frame_bgr.shape[0] - 1),
-                    (0, 0, 255),
-                    10,
-                )
-            # Encode frame for streaming
-            _, buffer = cv2.imencode(".jpg", frame_bgr)
-            frame_bytes = buffer.tobytes()
-            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+                if self.recording: # Check recording status of this Camera object
+                    cv2.rectangle(frame, (0, 0), (frame.shape[1] - 1, frame.shape[0] - 1), (0, 0, 255), 10)
 
+                _, buffer = cv2.imencode(".jpg", frame)
+                if buffer is None:
+                    print(f"Warning: cv2.imencode failed for LIVE FEED camera {self.camera_id}")
+                    continue
+                frame_bytes = buffer.tobytes()
+                try:
+                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+                except GeneratorExit:
+                    print(f"Client disconnected from live feed for camera {self.camera_id}.")
+                    break # Stop if client disconnects
+                except Exception as e_yield:
+                    print(f"Error yielding frame for camera {self.camera_id} live feed: {e_yield}")
+                    break
+        except Exception as e_feed:
+            print(f"Exception in generate_video_feed for camera {self.camera_id}: {e_feed}")
+        finally:
+            with self.capture_lock: # Decrement client count under lock
+                self.active_feed_clients -= 1
+            print(f"Live feed generation ended for camera {self.camera_id}. Active clients: {self.active_feed_clients}")
+            self._release_capture_if_unused()
 
 
 # Initialize Flask app
@@ -332,9 +464,13 @@ def save_cameras_to_json():
             json.dump(camera_data, f)
         print("Cameras saved successfully.")
     
+#Global variables for auto recording
+auto_record_camera_id = "1"
+auto_record_camera = None
+
 def load_cameras_from_json():
-    global cameras
-    cameras = {} # Start fresh
+    global cameras, auto_record_camera_id, auto_record_camera
+    cameras = {}  # Start fresh
     filepath = 'cameras.json'
     if os.path.exists(filepath):
         try:
@@ -343,20 +479,30 @@ def load_cameras_from_json():
                 for cam_id_key, camera_config_data in loaded_data.items():
                     # Ensure the config data itself contains the matching camera_id for from_dict
                     if 'camera_id' not in camera_config_data:
-                         print(f"Warning: 'camera_id' key missing in config for {cam_id_key}. Using dictionary key as ID.")
-                         camera_config_data['camera_id'] = cam_id_key # Add it for consistency
+                        print(f"Warning: 'camera_id' key missing in config for {cam_id_key}. Using dictionary key as ID.")
+                        camera_config_data['camera_id'] = cam_id_key  # Add it for consistency
 
                     # Create Camera object using the config dictionary
                     try:
-                         cameras[cam_id_key] = Camera.from_dict(camera_config_data)
+                        camera_obj = Camera.from_dict(camera_config_data)
+                        cameras[cam_id_key] = camera_obj
+                        if cam_id_key == auto_record_camera_id:
+                            auto_record_camera = camera_obj
+                            print(f"Designated auto-record camera '{auto_record_camera_id}' found in JSON.")
                     except Exception as e:
-                         print(f"Error creating Camera object for ID {cam_id_key} from loaded data: {e}")
+                        print(f"Error creating Camera object for ID {cam_id_key} from loaded data: {e}")
 
         except json.JSONDecodeError:
             print(f"Error decoding JSON from {filepath}. Starting with empty camera list.")
         except Exception as e:
             print(f"Error loading cameras from {filepath}: {e}. Starting with empty camera list.")
 
+    # Start auto-recording for Camera 1 if it exists
+    if auto_record_camera is not None:
+        print(f"Starting auto-recording for camera {auto_record_camera_id}.")
+        auto_record_camera.start_recording_thread()
+    else:
+        print(f"Auto-record camera '{auto_record_camera_id}' not found. Auto-recording NOT started.")
 
 load_cameras_from_json()
 
@@ -654,8 +800,11 @@ def start_recording(camera_id):
     if camera is None:
         return "Camera not found", 404  
 
-    camera.recording = True
-    Thread(target=camera.record_video).start()  
+    if camera.recording:
+        print(f"Camera {camera_id} is already recording.")
+        return "Already recording", 200
+    
+    camera.start_recording_thread() # New way
     return "", 204
 
 @app.route('/stop_recording/<camera_id>', methods=['POST'])
@@ -665,7 +814,7 @@ def stop_recording(camera_id):
     if camera is None:
         return "Camera not found", 404  
 
-    camera.recording = False
+    camera.stop_recording_logic() # New way
     return "", 204
 
 @app.route('/simulate_incident/<camera_id>', methods=['POST'])
@@ -798,10 +947,10 @@ def delete_incident_video(camera_id, incident_folder, filename):
 def release_all_cameras():
     print("Releasing all camera captures on exit...")
     global cameras
-    if cameras: # Check if cameras dictionary exists
-        for camera_id, camera in cameras.items():
-             if isinstance(camera, Camera): # Ensure it's a Camera object
-                 camera.release_capture()
+    if cameras:
+        for camera_id, camera_obj in cameras.items(): # Use a different variable name
+             if isinstance(camera_obj, Camera):
+                 camera_obj.release_capture() # Calls the Camera's release method
         print("Camera release attempts finished.")
     else:
         print("No camera objects found to release.")
@@ -810,6 +959,23 @@ atexit.register(release_all_cameras)
 
 if __name__ == "__main__":
     load_cameras_from_json()
+
+    def delayed_auto_start():
+        time.sleep(2) 
+        target_auto_camera = cameras.get(auto_record_camera_id)
+        if target_auto_camera:
+            print(f"[Delayed Auto-Start] Attempting to start auto-recording for camera: {target_auto_camera.camera_id} ({target_auto_camera.description})")
+            if not target_auto_camera.recording:
+                target_auto_camera.start_recording_thread()
+            else:
+                print(f"[Delayed Auto-Start] Camera {target_auto_camera.camera_id} already marked as recording. Skipping auto-start.")
+        else:
+            print(f"[Delayed Auto-Start] Auto-record camera ID '{auto_record_camera_id}' not found. Auto-recording NOT started.")
+
+    auto_start_initiator_thread = Thread(target=delayed_auto_start)
+    auto_start_initiator_thread.daemon = True
+    auto_start_initiator_thread.start()
+    
     host = '0.0.0.0'
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', use_reloader=False) 
         
