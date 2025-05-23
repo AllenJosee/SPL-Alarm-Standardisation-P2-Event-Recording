@@ -38,22 +38,59 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
-@app.route('/')
+@app.route('/') # Assuming this is the route for recordings_view.html
 def show_recordings_page():
     conn = get_db()
     cursor = conn.cursor()
-    # Use your table name 'video_metadata' and its columns
-    # The 'LIMIT' from your get_latest_recordings can be added here if you want to limit results on the main page
-    # For now, fetching all, ordered by timestamp.
-    # query = f"SELECT id, camera_id, filename, timestamp, path FROM {TABLE_NAME} ORDER BY timestamp DESC LIMIT 100" # Example with limit
-    query = f"SELECT id, camera_id, filename, timestamp, path FROM {TABLE_NAME} ORDER BY timestamp DESC"
+
+    # Get sort parameters from URL query
+    # Default sort: by timestamp, descending (most recent first)
+    sort_by_param = request.args.get('sort_by', 'timestamp')
+    sort_order_param = request.args.get('sort_order', 'desc')
+
+    # Whitelist allowed sort columns (keys are URL params, values are actual DB column names)
+    allowed_sort_columns = {
+        'id': 'id',
+        'camera_id': 'camera_id',
+        'filename': 'filename',
+        'timestamp': 'timestamp' # 'timestamp' column stores your date/time string
+    }
+    
+    # Validate sort_by_param, default to 'timestamp' if invalid
+    db_column_to_sort_by = allowed_sort_columns.get(sort_by_param, 'timestamp')
+
+    # Validate sort_order_param, default to 'desc' if invalid
+    if sort_order_param.lower() not in ['asc', 'desc']:
+        sort_order_param = 'desc'
+    
+    sql_sort_order = sort_order_param.upper()
+
+    # Construct the query with ORDER BY
+    # Ensure your TABLE_NAME and column names (id, camera_id, filename, timestamp, path) are correct
+    query = f"""
+        SELECT id, camera_id, filename, timestamp, path 
+        FROM {TABLE_NAME} 
+        ORDER BY {db_column_to_sort_by} {sql_sort_order}
+    """
+    # For a secondary sort (e.g., if timestamps are identical, sort by ID):
+    # query = f"""
+    #     SELECT id, camera_id, filename, timestamp, path
+    #     FROM {TABLE_NAME}
+    #     ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}
+    # """
+
     try:
         cursor.execute(query)
         recordings_data = cursor.fetchall()
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching recordings from {TABLE_NAME}: {e}")
         recordings_data = []
-    return render_template('recordings_view.html', recordings=recordings_data)
+    
+    return render_template('recordings_view.html', 
+                           recordings=recordings_data,
+                           current_sort_by=sort_by_param,  # Pass the param name used in URL
+                           current_sort_order=sort_order_param)
+
 
 @app.route('/play_video/<int:recording_id>')
 def play_video_file(recording_id):
