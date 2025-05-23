@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Recordings Manager</title> <!-- Changed title -->
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        th, td { padding: 10px 12px; border: 1px solid #ddd; text-align: left; word-break: break-all; }
+        th { background-color: #e9e9e9; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .actions button {
+            margin-right: 5px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .play-btn { background-color: #4CAF50; color: white; }
+        .download-btn { background-color: #008CBA; color: white; }
+        .delete-btn { background-color: #f44336; color: white; }
+        .actions button:hover { opacity: 0.8; }
+        #videoPlayerContainer { margin-top: 20px; text-align: center; }
+        #videoPlayer { width: 100%; max-width: 720px; border: 1px solid #ccc; background-color: #000; }
+        .message { padding: 10px; margin-bottom: 15px; border-radius: 3px; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Video Recordings Manager</h1> <!-- Changed heading -->
+    <div id="messageArea"></div>
+    <table id="recordingsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Camera ID</th>
+                <th>Filename</th>
+                <th>Timestamp</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rec in recordings %}
+            <tr id="row-{{ rec.id }}">
+                <td>{{ rec.id }}</td>
+                <td>{{ rec.camera_id }}</td>
+                <td>{{ rec.filename }}</td>
+                <td>{{ rec.timestamp }}</td>
+                <td class="actions">
+                    <!-- Updated URLs to match new endpoint names in video_manager_app.py -->
+                    <button class="play-btn" data-id="{{ rec.id }}">Play</button>
+                    <button class="download-btn" data-id="{{ rec.id }}">Download</button>
+                    <button class="delete-btn" data-id="{{ rec.id }}">Delete</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5">No recordings found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="videoPlayerContainer" style="display:none;">
+        <h2>Now Playing</h2>
+        <video id="videoPlayer" controls autoplay>
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <script>
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoPlayerContainer = document.getElementById('videoPlayerContainer');
+        const recordingsTable = document.getElementById('recordingsTable');
+        const messageArea = document.getElementById('messageArea');
+
+        function showMessage(text, type = 'success') {
+            messageArea.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => { messageArea.innerHTML = ''; }, 5000);
+        }
+
+        recordingsTable.addEventListener('click', function(event) {
+            const target = event.target;
+            if (!target.dataset || !target.dataset.id) return; 
+            
+            const recordingId = target.dataset.id;
+
+            if (target.classList.contains('play-btn')) {
+                videoPlayer.src = `/play_video/${recordingId}`; // Matched to new Flask route
+                videoPlayerContainer.style.display = 'block';
+                videoPlayer.load();
+                videoPlayer.play().catch(e => {
+                    console.error("Playback error:", e);
+                    showMessage('Error trying to play video. Check console.', 'error');
+                });
+                videoPlayerContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            } else if (target.classList.contains('download-btn')) {
+                window.location.href = `/download_video/${recordingId}`; // Matched to new Flask route
+
+            } else if (target.classList.contains('delete-btn')) {
+                if (confirm(`Are you sure you want to delete recording ID ${recordingId}? This action cannot be undone.`)) {
+                    fetch(`/delete_video/${recordingId}`, { // Matched to new Flask route
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().catch(() => { throw new Error(response.statusText) })
+                                           .then(errData => { throw new Error(errData.message || response.statusText) });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            const rowToRemove = document.getElementById(`row-${recordingId}`);
+                            if (rowToRemove) {
+                                rowToRemove.remove();
+                            }
+                            if (videoPlayer.src.includes(`/play_video/${recordingId}`)) { // Check against new play route
+                                videoPlayer.pause();
+                                videoPlayer.src = '';
+                                videoPlayerContainer.style.display = 'none';
+                            }
+                            showMessage(data.message || 'Recording deleted successfully.', 'success');
+                        } else {
+                            showMessage(data.message || 'Failed to delete recording.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showMessage(error.message || 'An error occurred while trying to delete the recording.', 'error');
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
