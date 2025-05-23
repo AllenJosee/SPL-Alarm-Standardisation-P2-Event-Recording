@@ -12,11 +12,29 @@ PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
 # Use the database name and table name from your existing setup
 DATABASE_NAME = 'videos.db'
 TABLE_NAME = 'video_metadata'
+INCIDENT_TABLE_NAME = 'incident_video_metadata' # New table name for incidents
+
 DATABASE_PATH = os.path.join(PROJECT_ROOT_DIR, DATABASE_NAME)
 
 # Template and static folder paths relative to SCRIPT_DIR
 TEMPLATE_FOLDER_PATH = os.path.join(SCRIPT_DIR, 'static', 'templates')
 STATIC_FOLDER_PATH = os.path.join(SCRIPT_DIR, 'static')
+
+ALLOWED_SORT_COLUMNS_RECORDINGS = { # Use a more specific name if you have multiple tables
+    'id': 'id',
+    'camera_id': 'camera_id',
+    'filename': 'filename',
+    'timestamp': 'timestamp'
+}
+
+ALLOWED_SORT_COLUMNS_INCIDENTS = { # Whitelist for the incident table
+    'id': 'id',
+    'camera_id': 'camera_id',
+    'filename': 'original_video_filename', # Maps 'filename' from URL to 'original_video_filename' in DB
+    'folder': 'incident_folder_name',
+    'timestamp': 'incident_trigger_timestamp' # Maps 'timestamp' from URL to 'incident_trigger_timestamp' in DB
+}
+
 
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER_PATH, static_folder=STATIC_FOLDER_PATH)
 
@@ -43,44 +61,52 @@ def show_recordings_page():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Get sort parameters from URL query
-    # Default sort: by timestamp, descending (most recent first)
+    try:
+        cursor.execute(f"SELECT DISTINCT camera_id FROM {TABLE_NAME} ORDER BY camera_id ASC")
+        # Fetchall returns list of tuples, e.g., [('1',), ('2',)]
+        # We want a list of strings/integers: ['1', '2']
+        unique_camera_ids_tuples = cursor.fetchall()
+        unique_camera_ids = [item['camera_id'] for item in unique_camera_ids_tuples] # Assuming row_factory is sqlite3.Row
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching unique camera IDs: {e}")
+        unique_camera_ids = []
+
+    # --- Sorting Parameters (existing) ---
     sort_by_param = request.args.get('sort_by', 'timestamp')
     sort_order_param = request.args.get('sort_order', 'desc')
+    # ... (existing sort validation logic) ...
+    db_column_to_sort_by = ALLOWED_SORT_COLUMNS_RECORDINGS.get(sort_by_param, 'timestamp')
+    sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
-    # Whitelist allowed sort columns (keys are URL params, values are actual DB column names)
-    allowed_sort_columns = {
-        'id': 'id',
-        'camera_id': 'camera_id',
-        'filename': 'filename',
-        'timestamp': 'timestamp' # 'timestamp' column stores your date/time string
-    }
+
+    # --- Filtering Parameter ---
+    filter_camera_id_param = request.args.get('filter_camera_id', '') # Default to empty string (show all)
+
+    # --- Build SQL Query ---
+    base_query = f"SELECT id, camera_id, filename, timestamp, path FROM {TABLE_NAME}"
+    where_clauses = []
+    query_params = []
+
+    if filter_camera_id_param and filter_camera_id_param != 'all':
+        where_clauses.append("camera_id = ?")
+        query_params.append(filter_camera_id_param)
     
-    # Validate sort_by_param, default to 'timestamp' if invalid
-    db_column_to_sort_by = allowed_sort_columns.get(sort_by_param, 'timestamp')
+    if where_clauses:
+        sql_where_clause = " WHERE " + " AND ".join(where_clauses)
+    else:
+        sql_where_clause = ""
 
-    # Validate sort_order_param, default to 'desc' if invalid
-    if sort_order_param.lower() not in ['asc', 'desc']:
-        sort_order_param = 'desc'
+    # Combine with ORDER BY
+    # Ensure db_column_to_sort_by and sql_sort_order are safely constructed/validated
+    final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}"
     
-    sql_sort_order = sort_order_param.upper()
+    # For secondary sort:
+    # final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}"
 
-    # Construct the query with ORDER BY
-    # Ensure your TABLE_NAME and column names (id, camera_id, filename, timestamp, path) are correct
-    query = f"""
-        SELECT id, camera_id, filename, timestamp, path 
-        FROM {TABLE_NAME} 
-        ORDER BY {db_column_to_sort_by} {sql_sort_order}
-    """
-    # For a secondary sort (e.g., if timestamps are identical, sort by ID):
-    # query = f"""
-    #     SELECT id, camera_id, filename, timestamp, path
-    #     FROM {TABLE_NAME}
-    #     ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}
-    # """
 
+    app.logger.info(f"Executing query: {final_query} with params: {query_params}")
     try:
-        cursor.execute(query)
+        cursor.execute(final_query, tuple(query_params)) # Pass params as a tuple
         recordings_data = cursor.fetchall()
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching recordings from {TABLE_NAME}: {e}")
@@ -88,7 +114,9 @@ def show_recordings_page():
     
     return render_template('recordings_view.html', 
                            recordings=recordings_data,
-                           current_sort_by=sort_by_param,  # Pass the param name used in URL
+                           unique_camera_ids=unique_camera_ids, # Pass unique IDs to template
+                           current_filter_camera_id=filter_camera_id_param, # Pass current filter
+                           current_sort_by=sort_by_param,
                            current_sort_order=sort_order_param)
 
 
@@ -171,6 +199,165 @@ def delete_video_entry(recording_id):
             return jsonify(success=False, message=str(e)), 500
     app.logger.warning(f"Recording ID {recording_id} not found in {TABLE_NAME} for deletion.")
     return jsonify(success=False, message=f"Recording not found in {TABLE_NAME}."), 404
+
+
+
+@app.route('/incidents')
+@app.route('/incidents')
+def show_incidents_page():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # --- Get Unique Camera IDs for Incident Filter Dropdown ---
+    try:
+        # Query DISTINCT camera_id from the INCIDENT_TABLE_NAME
+        cursor.execute(f"SELECT DISTINCT camera_id FROM {INCIDENT_TABLE_NAME} ORDER BY camera_id ASC")
+        unique_camera_ids_tuples_incident = cursor.fetchall()
+        unique_camera_ids_incident = [item['camera_id'] for item in unique_camera_ids_tuples_incident]
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching unique camera IDs for incidents: {e}")
+        unique_camera_ids_incident = []
+
+    # --- Sorting Parameters ---
+    sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort for incidents
+    sort_order_param = request.args.get('sort_order', 'desc')
+    
+    # Use the incident-specific whitelist
+    db_column_to_sort_by = ALLOWED_SORT_COLUMNS_INCIDENTS.get(sort_by_param, 'incident_trigger_timestamp')
+
+    if sort_order_param.lower() not in ['asc', 'desc']:
+        sort_order_param = 'desc'
+    sql_sort_order = sort_order_param.upper()
+
+    # --- Filtering Parameter ---
+    filter_camera_id_param = request.args.get('filter_camera_id', '') # Default to empty (show all)
+
+    # --- Build SQL Query for Incidents ---
+    base_query_incident = f"SELECT id, camera_id, original_video_filename, incident_trigger_timestamp, incident_folder_name, path FROM {INCIDENT_TABLE_NAME}"
+    where_clauses_incident = []
+    query_params_incident = []
+
+    if filter_camera_id_param and filter_camera_id_param != 'all':
+        where_clauses_incident.append("camera_id = ?")
+        query_params_incident.append(filter_camera_id_param)
+    
+    sql_where_clause_incident = ""
+    if where_clauses_incident:
+        sql_where_clause_incident = " WHERE " + " AND ".join(where_clauses_incident)
+
+    final_query_incident = f"{base_query_incident}{sql_where_clause_incident} ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}"
+    
+    app.logger.info(f"Executing incidents query: {final_query_incident} with params: {query_params_incident}")
+    try:
+        cursor.execute(final_query_incident, tuple(query_params_incident))
+        incidents_data = cursor.fetchall()
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching incidents from {INCIDENT_TABLE_NAME}: {e}")
+        incidents_data = []
+    
+    return render_template('incidents_view.html',
+                           incidents=incidents_data,
+                           unique_camera_ids_incident=unique_camera_ids_incident, # Pass incident-specific camera IDs
+                           current_filter_camera_id=filter_camera_id_param,
+                           current_sort_by=sort_by_param,
+                           current_sort_order=sort_order_param)
+
+@app.route('/play_incident_video/<int:incident_id>')
+def play_incident_video_file(incident_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    query = f"SELECT path FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
+    cursor.execute(query, (incident_id,))
+    incident = cursor.fetchone()
+    if incident:
+        db_relative_path = incident['path']
+        video_directory_absolute = os.path.join(PROJECT_ROOT_DIR, os.path.dirname(db_relative_path))
+        video_filename = os.path.basename(db_relative_path)
+        
+        app.logger.info(f"Playing Incident: Dir='{video_directory_absolute}', File='{video_filename}'")
+        if not os.path.exists(os.path.join(video_directory_absolute, video_filename)):
+            app.logger.error(f"Incident file not found on disk: {os.path.join(video_directory_absolute, video_filename)}")
+            return "Incident video file not found on server", 404
+        return send_from_directory(video_directory_absolute, video_filename)
+    app.logger.warning(f"Incident ID {incident_id} not found in {INCIDENT_TABLE_NAME} for playback.")
+    return f"Incident video not found in {INCIDENT_TABLE_NAME}", 404
+
+@app.route('/download_incident_video/<int:incident_id>')
+def download_incident_video_file(incident_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    # We need original_video_filename for the download prompt
+    query = f"SELECT path, original_video_filename FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
+    cursor.execute(query, (incident_id,))
+    incident = cursor.fetchone()
+    if incident:
+        db_relative_path = incident['path']
+        download_as_filename = incident['original_video_filename'] # Use original filename for download
+
+        video_directory_absolute = os.path.join(PROJECT_ROOT_DIR, os.path.dirname(db_relative_path))
+        actual_filename_on_disk = os.path.basename(db_relative_path) # This might be same as original_video_filename
+        
+        app.logger.info(f"Downloading Incident: Dir='{video_directory_absolute}', File='{actual_filename_on_disk}', As='{download_as_filename}'")
+        if not os.path.exists(os.path.join(video_directory_absolute, actual_filename_on_disk)):
+            app.logger.error(f"Incident file not found on disk for download: {os.path.join(video_directory_absolute, actual_filename_on_disk)}")
+            return "Incident video file not found on server", 404
+        return send_from_directory(
+            video_directory_absolute,
+            actual_filename_on_disk,
+            as_attachment=True,
+            download_name=download_as_filename
+        )
+    app.logger.warning(f"Incident ID {incident_id} not found in {INCIDENT_TABLE_NAME} for download.")
+    return f"Incident video not found in {INCIDENT_TABLE_NAME}", 404
+
+@app.route('/delete_incident_video/<int:incident_id>', methods=['POST'])
+def delete_incident_video_entry(incident_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    query_select = f"SELECT path FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
+    cursor.execute(query_select, (incident_id,))
+    incident = cursor.fetchone()
+
+    if incident:
+        try:
+            db_relative_path = incident['path']
+            absolute_file_path_on_disk = os.path.join(PROJECT_ROOT_DIR, db_relative_path)
+
+            file_deleted_from_disk = False
+            if os.path.exists(absolute_file_path_on_disk):
+                os.remove(absolute_file_path_on_disk)
+                app.logger.info(f"Deleted incident file from disk: {absolute_file_path_on_disk}")
+                file_deleted_from_disk = True
+            else:
+                app.logger.warning(f"Incident file not found on disk for deletion: {absolute_file_path_on_disk}")
+
+            query_delete = f"DELETE FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
+            cursor.execute(query_delete, (incident_id,))
+            conn.commit()
+            app.logger.info(f"Deleted incident ID {incident_id} from {INCIDENT_TABLE_NAME}.")
+            return jsonify(success=True, message=f"Incident video ID {incident_id} deleted." + (" File also removed." if file_deleted_from_disk else " File not found on disk."))
+        except Exception as e:
+            conn.rollback()
+            app.logger.error(f"Error deleting incident {incident_id} from {INCIDENT_TABLE_NAME}: {e}")
+            return jsonify(success=False, message=str(e)), 500
+    app.logger.warning(f"Incident ID {incident_id} not found in {INCIDENT_TABLE_NAME} for deletion.")
+    return jsonify(success=False, message=f"Incident video not found in {INCIDENT_TABLE_NAME}."), 404
+
+
+if __name__ == '__main__':
+    app.logger.info(f"--- Video Manager App Starting ---")
+    app.logger.info(f"Project Root: {PROJECT_ROOT_DIR}")
+    app.logger.info(f"Connecting to Database: {DATABASE_PATH}")
+    app.logger.info(f"Using Recordings Table: {TABLE_NAME}")
+    app.logger.info(f"Using Incidents Table: {INCIDENT_TABLE_NAME}") # Log the new table name
+    app.logger.info(f"Template Folder: {app.template_folder}")
+    app.logger.info(f"Static Folder: {app.static_folder}")
+
+    if not os.path.exists(DATABASE_PATH):
+        app.logger.error(f"CRITICAL: DATABASE '{DATABASE_NAME}' NOT FOUND AT: {DATABASE_PATH}")
+        app.logger.error("Please ensure the database exists and is correctly pathed. You might need to run your main app's init_db() or a setup script.")
+    
+    app.run(debug=True, host='0.0.0.0', port=5001)
 
 if __name__ == '__main__':
     app.logger.info(f"--- Video Manager App Starting ---")

@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Recordings Manager</title>
+    <title>Incident Video Manager</title>
     <style>
-         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
         h1 { color: #333; }
         .nav-tabs { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;}
         .nav-tabs a { margin-right: 15px; text-decoration: none; color: #007bff; padding: 5px 10px; border-radius: 4px 4px 0 0; }
@@ -55,55 +55,59 @@
 <body>
     <h1>Video Manager</h1>
     <div class="nav-tabs">
-        <a href="{{ url_for('show_recordings_page') }}" class="active">Recordings</a>
-        <a href="{{ url_for('show_incidents_page') }}">Incidents</a>
+        <a href="{{ url_for('show_recordings_page') }}">Recordings</a>
+        <a href="{{ url_for('show_incidents_page') }}" class="active">Incidents</a>
     </div>
 
-    <h2>Recordings</h2>
+    <h2>Incident Videos</h2>
     <div id="messageArea"></div>
 
-    <!-- Camera ID Filter Dropdown -->
+    <!-- Camera ID Filter Dropdown for Incidents -->
     <div class="filter-container">
-        <label for="cameraFilter">Filter by Camera ID:</label>
-        <select id="cameraFilter" name="camera_id_filter">
+        <label for="incidentCameraFilter">Filter by Camera ID:</label>
+        <select id="incidentCameraFilter" name="incident_camera_id_filter">
             <option value="all" {% if not current_filter_camera_id or current_filter_camera_id == 'all' %}selected{% endif %}>All Cameras</option>
-            {% for cam_id in unique_camera_ids %}
+            {% for cam_id in unique_camera_ids_incident %} {# Use incident-specific unique IDs #}
                 <option value="{{ cam_id }}" {% if current_filter_camera_id == cam_id|string %}selected{% endif %}>Camera {{ cam_id }}</option>
             {% endfor %}
         </select>
     </div>
 
-    <table id="recordingsTable">
+    <table id="incidentsTable">
         <thead>
             <tr>
                 <th class="sortable">
                     {% set next_id_order = 'asc' if current_sort_by == 'id' and current_sort_order == 'desc' else 'desc' %}
-                    {# Preserve filter when sorting #}
-                    <a href="{{ url_for('show_recordings_page', sort_by='id', sort_order=next_id_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">ID
+                    <a href="{{ url_for('show_incidents_page', sort_by='id', sort_order=next_id_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">ID
                         {% if current_sort_by == 'id' %}<span class="sort-arrow">{{ '▼' if current_sort_order == 'desc' else '▲' }}</span>{% endif %}
                     </a>
                 </th>
                 <th class="sortable">
-                    {% set next_camera_id_order = 'asc' if current_sort_by == 'camera_id' and current_sort_order == 'desc' else 'desc' %}
-                    <a href="{{ url_for('show_recordings_page', sort_by='camera_id', sort_order=next_camera_id_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Camera ID
+                    {% set next_cam_order = 'asc' if current_sort_by == 'camera_id' and current_sort_order == 'desc' else 'desc' %}
+                    <a href="{{ url_for('show_incidents_page', sort_by='camera_id', sort_order=next_cam_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Camera ID
                         {% if current_sort_by == 'camera_id' %}<span class="sort-arrow">{{ '▼' if current_sort_order == 'desc' else '▲' }}</span>{% endif %}
                     </a>
                 </th>
                 <th class="sortable">
-                     {% set next_filename_order = 'asc' if current_sort_by == 'filename' and current_sort_order == 'desc' else 'desc' %}
-                    <a href="{{ url_for('show_recordings_page', sort_by='filename', sort_order=next_filename_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Filename
+                    {% set next_filename_order = 'asc' if current_sort_by == 'filename' and current_sort_order == 'desc' else 'desc' %}
+                    <a href="{{ url_for('show_incidents_page', sort_by='filename', sort_order=next_filename_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Original Filename
                         {% if current_sort_by == 'filename' %}<span class="sort-arrow">{{ '▼' if current_sort_order == 'desc' else '▲' }}</span>{% endif %}
                     </a>
                 </th>
                 <th class="sortable">
-                    {% set next_timestamp_order = 'asc' if current_sort_by == 'timestamp' and current_sort_order == 'desc' else 'desc' %}
-                     {# If not currently sorted by timestamp, or sorted asc, next click on timestamp should be desc #}
+                    {% set next_folder_order = 'asc' if current_sort_by == 'folder' and current_sort_order == 'desc' else 'desc' %}
+                    <a href="{{ url_for('show_incidents_page', sort_by='folder', sort_order=next_folder_order, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Incident Folder
+                        {% if current_sort_by == 'folder' %}<span class="sort-arrow">{{ '▼' if current_sort_order == 'desc' else '▲' }}</span>{% endif %}
+                    </a>
+                </th>
+                <th class="sortable">
+                     {# For timestamp, usually default to desc first #}
                     {% if current_sort_by != 'timestamp' or current_sort_order == 'asc' %}
-                        {% set next_timestamp_order_for_link = 'desc' %}
-                    {% else %} {# currently sorted by timestamp desc #}
-                        {% set next_timestamp_order_for_link = 'asc' %}
+                        {% set next_ts_order_link = 'desc' %}
+                    {% else %}
+                        {% set next_ts_order_link = 'asc' %}
                     {% endif %}
-                    <a href="{{ url_for('show_recordings_page', sort_by='timestamp', sort_order=next_timestamp_order_for_link, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Timestamp
+                    <a href="{{ url_for('show_incidents_page', sort_by='timestamp', sort_order=next_ts_order_link, filter_camera_id=current_filter_camera_id if current_filter_camera_id else 'all') }}">Trigger Timestamp
                         {% if current_sort_by == 'timestamp' %}<span class="sort-arrow">{{ '▼' if current_sort_order == 'desc' else '▲' }}</span>{% endif %}
                     </a>
                 </th>
@@ -111,26 +115,26 @@
             </tr>
         </thead>
         <tbody>
-            {% for rec in recordings %}
-            <tr id="row-recording-{{ rec.id }}"> {# Changed from row-{{rec.id}} for specificity #}
-                <td>{{ rec.id }}</td>
-                <td>{{ rec.camera_id }}</td>
-                <td>{{ rec.filename }}</td>
-                <td>{{ rec.timestamp }}</td>
+            {% for incident in incidents %}
+            <tr id="row-incident-{{ incident.id }}">
+                <td>{{ incident.id }}</td>
+                <td>{{ incident.camera_id }}</td>
+                <td>{{ incident.original_video_filename }}</td>
+                <td>{{ incident.incident_folder_name }}</td>
+                <td>{{ incident.incident_trigger_timestamp }}</td>
                 <td class="actions">
-                    <button class="play-btn" data-id="{{ rec.id }}">Play</button>
-                    {# Update download link if you are using button styling #}
-                    <a href="{{ url_for('download_video_file', recording_id=rec.id) }}" class="download-btn" style="color:white; text-decoration:none; display:inline-block; text-align:center;" download>Download</a>
-                    <button class="delete-btn" data-id="{{ rec.id }}">Delete</button>
+                    <button class="play-btn" data-id="{{ incident.id }}">Play</button>
+                    <a href="{{ url_for('download_incident_video_file', incident_id=incident.id) }}" class="button-link download-btn" download>Download</a>
+                    <button class="delete-btn" data-id="{{ incident.id }}">Delete</button>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5">
+                <td colspan="6">
                     {% if current_filter_camera_id and current_filter_camera_id != 'all' %}
-                        No recordings found for Camera {{ current_filter_camera_id }}.
+                        No incidents found for Camera {{ current_filter_camera_id }}.
                     {% else %}
-                        No recordings found.
+                        No incident videos found.
                     {% endif %}
                 </td>
             </tr>
@@ -139,25 +143,23 @@
     </table>
 
     <div id="videoPlayerContainer" style="display:none;">
-        <h2>Now Playing</h2>
+        <h2>Now Playing Incident</h2>
         <video id="videoPlayer" controls autoplay>
             Your browser does not support the video tag.
         </video>
     </div>
 
     <script>
-        // --- Camera Filter Logic ---
-        const cameraFilterSelect = document.getElementById('cameraFilter');
-        if (cameraFilterSelect) {
-            cameraFilterSelect.addEventListener('change', function() {
+        // --- Incident Camera Filter Logic ---
+        const incidentCameraFilterSelect = document.getElementById('incidentCameraFilter');
+        if (incidentCameraFilterSelect) {
+            incidentCameraFilterSelect.addEventListener('change', function() {
                 const selectedCameraId = this.value;
-                // Preserve current sort order when changing filter
                 const currentUrl = new URL(window.location.href);
-                const sortBy = currentUrl.searchParams.get('sort_by') || 'timestamp'; // Default sort
+                const sortBy = currentUrl.searchParams.get('sort_by') || 'timestamp'; // Default sort for incidents
                 const sortOrder = currentUrl.searchParams.get('sort_order') || 'desc'; // Default order
 
-                // Construct new URL with filter and existing sort params
-                const newUrl = new URL("{{ url_for('show_recordings_page') }}", window.location.origin);
+                const newUrl = new URL("{{ url_for('show_incidents_page') }}", window.location.origin);
                 newUrl.searchParams.set('filter_camera_id', selectedCameraId);
                 newUrl.searchParams.set('sort_by', sortBy);
                 newUrl.searchParams.set('sort_order', sortOrder);
@@ -166,75 +168,66 @@
             });
         }
 
-        // --- Existing Play/Download/Delete JavaScript ---
-        const videoPlayer = document.getElementById('videoPlayer');
+        // --- Existing Play/Download/Delete JavaScript for Incidents ---
+        const videoPlayer = document.getElementById('videoPlayer'); // Assuming one player for the page
         const videoPlayerContainer = document.getElementById('videoPlayerContainer');
-        const recordingsTable = document.getElementById('recordingsTable');
+        const incidentsTable = document.getElementById('incidentsTable');
         const messageArea = document.getElementById('messageArea');
 
         function showMessage(text, type = 'success') {
-            if(messageArea) { // Check if messageArea exists
+            if(messageArea){
                 messageArea.innerHTML = `<div class="message ${type}">${text}</div>`;
                 setTimeout(() => { messageArea.innerHTML = ''; }, 5000);
-            } else {
-                console.warn("Message area not found, cannot display message:", text);
             }
         }
 
-        if (recordingsTable) { // Check if the table exists on this page
-            recordingsTable.addEventListener('click', function(event) {
+        if (incidentsTable) { // Ensure table exists
+            incidentsTable.addEventListener('click', function(event) {
                 const target = event.target;
-                // Modified to also catch clicks on <a> tags styled as buttons
-                if ((target.tagName === 'BUTTON' || (target.tagName === 'A' && target.classList.contains('download-btn'))) && target.closest('td.actions')) {
+                if ((target.tagName === 'BUTTON' || (target.tagName === 'A' && target.classList.contains('button-link'))) && target.closest('td.actions')) {
                     
-                    // For download links, we don't need data-id, the href handles it.
+                    // For download links, href handles it.
                     if (target.classList.contains('download-btn') && target.tagName === 'A') {
-                        return; // Let the link's default behavior (download) proceed
+                        return; 
                     }
 
-                    const recordingId = target.dataset.id;
-                    if (!recordingId) return; // Should only apply to buttons now
+                    const incidentId = target.dataset.id; 
+                    if (!incidentId) return;
 
                     if (target.classList.contains('play-btn')) {
-                        videoPlayer.src = `/play_video/${recordingId}`;
+                        videoPlayer.src = `/play_incident_video/${incidentId}`;
                         videoPlayerContainer.style.display = 'block';
                         videoPlayer.load();
                         videoPlayer.play().catch(e => {
-                            console.error("Playback error:", e);
-                            showMessage('Error trying to play video. Check console.', 'error');
+                            console.error("Incident Playback error:", e);
+                            showMessage('Error playing incident video.', 'error');
                         });
                         videoPlayerContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
                     } else if (target.classList.contains('delete-btn')) {
-                        if (confirm(`Are you sure you want to delete recording ID ${recordingId}? This action cannot be undone.`)) {
-                            fetch(`/delete_video/${recordingId}`, {
+                        if (confirm(`Are you sure you want to delete incident video ID ${incidentId}?`)) {
+                            fetch(`/delete_incident_video/${incidentId}`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' }
                             })
-                            .then(response => {
-                                if (!response.ok) {
-                                    return response.json().catch(() => { throw new Error(response.statusText) })
-                                                .then(errData => { throw new Error(errData.message || response.statusText) });
-                                }
-                                return response.json();
-                            })
+                            .then(response => response.json())
                             .then(data => {
                                 if (data.success) {
-                                    const rowToRemove = document.getElementById(`row-recording-${recordingId}`); // Updated ID
+                                    const rowToRemove = document.getElementById(`row-incident-${incidentId}`);
                                     if (rowToRemove) rowToRemove.remove();
                                     
-                                    if (videoPlayer.src.includes(`/play_video/${recordingId}`)) {
+                                    if (videoPlayer.src.includes(`/play_incident_video/${incidentId}`)) {
                                         videoPlayer.pause(); videoPlayer.src = '';
                                         videoPlayerContainer.style.display = 'none';
                                     }
-                                    showMessage(data.message || 'Recording deleted successfully.', 'success');
+                                    showMessage(data.message || 'Incident video deleted.', 'success');
                                 } else {
-                                    showMessage(data.message || 'Failed to delete recording.', 'error');
+                                    showMessage(data.message || 'Failed to delete incident.', 'error');
                                 }
                             })
                             .catch(error => {
                                 console.error('Error:', error);
-                                showMessage(error.message || 'An error occurred while trying to delete the recording.', 'error');
+                                showMessage('An error occurred while deleting incident.', 'error');
                             });
                         }
                     }
