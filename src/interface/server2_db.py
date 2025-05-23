@@ -20,16 +20,16 @@ app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# SRC_DIR should be SPL-Alram-P2-Database/src/
+# SRC_DIR = SPL-Alram-P2-Database/src/
 SRC_DIR = os.path.dirname(SCRIPT_DIR)
-# PROJECT_ROOT_DIR should be SPL-Alram-P2-Database/
+# PROJECT_ROOT_DIR = SPL-Alram-P2-Database/
 PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
 
 DATABASE_NAME = 'videos.db'
 TABLE_NAME = 'video_metadata'
 INCIDENT_TABLE_NAME = 'incident_video_metadata'
 
-# DATABASE_PATH will be SPL-Alram-P2-Database/videos.db
+# DATABASE_PATH = SPL-Alram-P2-Database/videos.db
 DATABASE_PATH = os.path.join(PROJECT_ROOT_DIR, DATABASE_NAME)
 app.logger.setLevel(logging.INFO)
 
@@ -65,7 +65,7 @@ def init_db():
             timestamp TEXT NOT NULL,
             path TEXT NOT NULL UNIQUE 
         )
-    ''') # Added UNIQUE constraint to path for regular recordings
+    ''') 
 
     # Create table for incident videos (if not exists)
     cursor.execute(f'''
@@ -78,7 +78,7 @@ def init_db():
             incident_folder_name TEXT NOT NULL, -- Name of the folder like camX_incident_YYYYMMDD-HHMMSS
             path TEXT NOT NULL UNIQUE -- Full relative path to the copied incident video, e.g., src/incidents/cameraX/incident_folder_name/video.mp4
         )
-    ''') # Added UNIQUE constraint to path for incident recordings
+    ''') 
     conn.commit()
     conn.close()
     app.logger.info(f"Database {DATABASE_NAME} initialized with tables: {TABLE_NAME}, {INCIDENT_TABLE_NAME}")
@@ -196,8 +196,8 @@ class Camera:
                     "id": row["id"],
                     "filename": row["filename"],
                     "timestamp": row["timestamp"], # DB timestamp (YYYYMMDD-HHMMSS)
-                    "display_timestamp": display_ts_from_file, # User-friendly from file ctime
-                    "raw_timestamp": raw_ts_from_file, # Actual file ctime for sorting if needed
+                    "display_timestamp": display_ts_from_file, 
+                    "raw_timestamp": raw_ts_from_file, 
                     "path": row["path"] # Relative path from DB
                 })
             app.logger.info(f"[Camera {self.camera_id}] Loaded {len(videos)} videos from database.")
@@ -233,8 +233,7 @@ class Camera:
                 absolute_file_path = os.path.join(PROJECT_ROOT_DIR, row["path"])
                 file_exists = os.path.exists(absolute_file_path)
                 
-                # We use incident_trigger_timestamp for display primarily
-                display_ts = row["incident_trigger_timestamp"] # Can be formatted if needed
+                display_ts = row["incident_trigger_timestamp"] 
                 if not file_exists:
                     display_ts += " (File Missing)"
 
@@ -275,7 +274,6 @@ class Camera:
             filename = f"cam{str(self.camera_id)}_{formatted_timestamp}.mp4"
 
             # self.recordings_dir is like "src/recordings/camera1" (relative to PROJECT_ROOT)
-            # This path is what gets stored in the database
             relative_path_for_db = os.path.join(self.recordings_dir, filename)
             # This is the full path for OpenCV to write the file
             absolute_filepath_for_cv = os.path.join(PROJECT_ROOT_DIR, relative_path_for_db)
@@ -290,7 +288,7 @@ class Camera:
                 self.load_settings()
             
             video_duration_seconds = self.settings.get("video_duration", 5) # Default 5s
-            fps = 15 # Or from settings
+            fps = 15 
 
             try:
                 if not capture.isOpened():
@@ -392,14 +390,12 @@ class Camera:
         """
         conn = None
         try:
-            # It's generally safer to use the DATABASE_PATH constant here
             conn = sqlite3.connect(DATABASE_PATH)
             cursor = conn.cursor()
             query = f"""
                 INSERT INTO {TABLE_NAME} (camera_id, filename, timestamp, path)
                 VALUES (?, ?, ?, ?)
             """
-            # Ensure self.camera_id is a string if your DB column is TEXT
             cursor.execute(query, (str(self.camera_id), filename, timestamp_str, relative_path_to_project_root))
             conn.commit()
             app.logger.debug(f"DB Insert for Camera {self.camera_id}: File={filename}, Path={relative_path_to_project_root}")
@@ -681,7 +677,7 @@ def delete_camera(camera_id):
         camera_to_delete.release_capture()
 
         # Get paths before deleting the camera object from the 'cameras' dictionary
-        recordings_path_to_remove = camera_to_delete.recordings_dir # This is like "src/recordings/cameraX"
+        recordings_path_to_remove = camera_to_delete.recordings_dir 
         incidents_path_to_remove = camera_to_delete.incidents_dir
         settings_path_to_remove = camera_to_delete.settings_file
         

@@ -9,30 +9,28 @@ SRC_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
 
 # --- Database Configuration ---
-# Use the database name and table name from your existing setup
 DATABASE_NAME = 'videos.db'
 TABLE_NAME = 'video_metadata'
-INCIDENT_TABLE_NAME = 'incident_video_metadata' # New table name for incidents
+INCIDENT_TABLE_NAME = 'incident_video_metadata' 
 
 DATABASE_PATH = os.path.join(PROJECT_ROOT_DIR, DATABASE_NAME)
 
-# Template and static folder paths relative to SCRIPT_DIR
 TEMPLATE_FOLDER_PATH = os.path.join(SCRIPT_DIR, 'static', 'templates')
 STATIC_FOLDER_PATH = os.path.join(SCRIPT_DIR, 'static')
 
-ALLOWED_SORT_COLUMNS_RECORDINGS = { # Use a more specific name if you have multiple tables
+ALLOWED_SORT_COLUMNS_RECORDINGS = { 
     'id': 'id',
     'camera_id': 'camera_id',
     'filename': 'filename',
     'timestamp': 'timestamp'
 }
 
-ALLOWED_SORT_COLUMNS_INCIDENTS = { # Whitelist for the incident table
+ALLOWED_SORT_COLUMNS_INCIDENTS = { 
     'id': 'id',
     'camera_id': 'camera_id',
-    'filename': 'original_video_filename', # Maps 'filename' from URL to 'original_video_filename' in DB
+    'filename': 'original_video_filename', 
     'folder': 'incident_folder_name',
-    'timestamp': 'incident_trigger_timestamp' # Maps 'timestamp' from URL to 'incident_trigger_timestamp' in DB
+    'timestamp': 'incident_trigger_timestamp' 
 }
 
 
@@ -56,7 +54,7 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
-@app.route('/') # Assuming this is the route for recordings_view.html
+@app.route('/') 
 def show_recordings_page():
     conn = get_db()
     cursor = conn.cursor()
@@ -66,15 +64,13 @@ def show_recordings_page():
         # Fetchall returns list of tuples, e.g., [('1',), ('2',)]
         # We want a list of strings/integers: ['1', '2']
         unique_camera_ids_tuples = cursor.fetchall()
-        unique_camera_ids = [item['camera_id'] for item in unique_camera_ids_tuples] # Assuming row_factory is sqlite3.Row
+        unique_camera_ids = [item['camera_id'] for item in unique_camera_ids_tuples] 
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching unique camera IDs: {e}")
         unique_camera_ids = []
 
-    # --- Sorting Parameters (existing) ---
     sort_by_param = request.args.get('sort_by', 'timestamp')
     sort_order_param = request.args.get('sort_order', 'desc')
-    # ... (existing sort validation logic) ...
     db_column_to_sort_by = ALLOWED_SORT_COLUMNS_RECORDINGS.get(sort_by_param, 'timestamp')
     sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
@@ -96,14 +92,8 @@ def show_recordings_page():
     else:
         sql_where_clause = ""
 
-    # Combine with ORDER BY
-    # Ensure db_column_to_sort_by and sql_sort_order are safely constructed/validated
     final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}"
     
-    # For secondary sort:
-    # final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}"
-
-
     app.logger.info(f"Executing query: {final_query} with params: {query_params}")
     try:
         cursor.execute(final_query, tuple(query_params)) # Pass params as a tuple
@@ -286,7 +276,7 @@ def play_incident_video_file(incident_id):
 def download_incident_video_file(incident_id):
     conn = get_db()
     cursor = conn.cursor()
-    # We need original_video_filename for the download prompt
+    #original_video_filename for the download prompt
     query = f"SELECT path, original_video_filename FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
     cursor.execute(query, (incident_id,))
     incident = cursor.fetchone()
@@ -295,7 +285,7 @@ def download_incident_video_file(incident_id):
         download_as_filename = incident['original_video_filename'] # Use original filename for download
 
         video_directory_absolute = os.path.join(PROJECT_ROOT_DIR, os.path.dirname(db_relative_path))
-        actual_filename_on_disk = os.path.basename(db_relative_path) # This might be same as original_video_filename
+        actual_filename_on_disk = os.path.basename(db_relative_path) 
         
         app.logger.info(f"Downloading Incident: Dir='{video_directory_absolute}', File='{actual_filename_on_disk}', As='{download_as_filename}'")
         if not os.path.exists(os.path.join(video_directory_absolute, actual_filename_on_disk)):
