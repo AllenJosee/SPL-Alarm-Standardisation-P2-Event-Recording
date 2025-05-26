@@ -13,6 +13,8 @@ from functools import wraps
 import atexit
 import sqlite3
 import logging
+import datetime
+from dateutil import parser
 
 logging.basicConfig(level=logging.INFO)
 
@@ -358,8 +360,12 @@ class Camera:
 
         app.logger.info(f"Record_video loop started for camera {self.camera_id}.")
         while self.recording and not self._stop_recording_event.is_set():
-            formatted_timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"cam{str(self.camera_id)}_{formatted_timestamp}.mp4"
+            db_timestamp_to_store = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+            
+            # You can keep your existing filename format if you like, 
+            # it doesn't affect DB sorting.
+            filename_timestamp_part = time.strftime("%Y%m%d-%H%M%S") 
+            filename = f"cam{str(self.camera_id)}_{filename_timestamp_part}.mp4"
             relative_path_for_db = os.path.join(self.recordings_dir, filename)
             absolute_filepath_for_cv = os.path.join(PROJECT_ROOT_DIR, relative_path_for_db)
             os.makedirs(os.path.dirname(absolute_filepath_for_cv), exist_ok=True)
@@ -424,7 +430,8 @@ class Camera:
                 app.logger.info(f"Cam {self.camera_id}: Wrote {frame_count} frames to {filename}.")
 
                 if frame_count > 0:
-                    self.insert_video_metadata(filename, formatted_timestamp, relative_path_for_db)
+                    # Store the ISO timestamp in the DB
+                    self.insert_video_metadata(filename, db_timestamp_to_store, relative_path_for_db)                    
                     self.prune_videos_from_database()
                 else:
                     # ... (rest of your existing empty file handling logic) ...
@@ -440,6 +447,7 @@ class Camera:
                 time.sleep(0.01) # Short sleep between segments
 
         app.logger.info(f"Record_video loop EXITED for camera {self.camera_id}. Final recording state: {self.recording}, Event set: {self._stop_recording_event.is_set()}")
+    
     def prune_videos_from_database(self):
         """Prunes oldest videos for this camera based on settings, using the database."""
         conn = None
@@ -548,9 +556,11 @@ class Camera:
         return videos
 
     
+        
     def simulate_incident(self):
-        incident_trigger_timestamp = time.strftime("%Y%m%d-%H%M%S")
-        incident_folder_name_only = f"cam{str(self.camera_id)}_incident_{incident_trigger_timestamp}"
+        incident_trigger_iso_timestamp_for_db = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()        
+        incident_folder_timestamp_part = time.strftime("%Y%m%d-%H%M%S")
+        incident_folder_name_only = f"cam{str(self.camera_id)}_incident_{incident_folder_timestamp_part}"
         
         # self.incidents_dir is like "src/incidents/camera1"
         # relative_incident_folder_path is "src/incidents/camera1/cam1_incident_XYZ"
@@ -585,7 +595,7 @@ class Camera:
                     
                     # Insert metadata for the copied incident video
                     self.insert_incident_video_metadata(
-                        incident_trigger_timestamp,
+                        incident_trigger_iso_timestamp_for_db,
                         original_filename,
                         original_timestamp_from_db, # Store original video's timestamp
                         incident_folder_name_only,  # Just the folder name part
@@ -664,6 +674,28 @@ class Camera:
             app.logger.info(f"Live feed generation ended for camera {self.camera_id}. Active clients: {self.active_feed_clients}")
             self._release_capture_if_unused() # Attempt to release capture if no longer needed
 
+def format_display_timestamp_sgt(iso_timestamp_str_utc):
+        """Converts UTC ISO timestamp string to SGT display string."""
+        if not iso_timestamp_str_utc:
+            return "N/A"
+        try:
+            dt_object_utc = parser.isoparse(iso_timestamp_str_utc)
+            # Ensure it's UTC
+            if dt_object_utc.tzinfo is None or dt_object_utc.tzinfo.utcoffset(dt_object_utc) is None:
+                dt_object_utc = dt_object_utc.replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt_object_utc = dt_object_utc.astimezone(datetime.timezone.utc)
+            
+            sgt_timezone = datetime.timezone(datetime.timedelta(hours=8))
+            dt_object_sgt = dt_object_utc.astimezone(sgt_timezone)
+            
+            # Choose your desired SGT display format
+            return dt_object_sgt.strftime("%Y-%m-%d %H:%M:%S SGT") 
+            # Or for "Mon May 26 10:22:30 2025 SGT" format:
+            # return dt_object_sgt.strftime("%a %b %d %H:%M:%S %Y SGT") 
+        except Exception as e:
+            app.logger.warning(f"Could not parse/convert incident timestamp: '{iso_timestamp_str_utc}'. Error: {e}")
+            return iso_timestamp_str_utc # Fallback to showing the raw string
 
 
 def save_cameras_to_json():
@@ -941,8 +973,8 @@ def videos(camera_id):
     sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort by DB timestamp
     sort_order_param = request.args.get('sort_order', 'desc') # Default descending
 
-    allowed_sort_columns = {'id': 'id', 'camera_id': 'camera_id', 'filename': 'filename', 'timestamp': 'timestamp'}
-    db_column_to_sort = allowed_sort_columns.get(sort_by_param, 'timestamp')
+    allowed_sort_columns_videos = {'id': 'id', 'camera_id': 'camera_id', 'filename': 'filename', 'timestamp': 'timestamp'}
+    db_column_to_sort = allowed_sort_columns_videos.get(sort_by_param, 'timestamp')
     sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
     # Fetch videos from database for this camera with sorting
@@ -970,23 +1002,31 @@ def videos(camera_id):
                 "id": row["id"],
                 "filename": row["filename"],
                 "timestamp": row["timestamp"], # DB timestamp
-                "display_timestamp": display_ts_from_file,
-                "raw_timestamp": raw_ts_from_file # For client-side sort if any, or just info
+                "display_timestamp": format_display_timestamp_sgt(row["timestamp"]), 
+                "path": row["path"]
             })
 
     except sqlite3.Error as e:
-        app.logger.error(f"DB error fetching videos for cam {camera_id}: {e}")
+        app.logger.error(f"DB error fetching videos for cam {camera_id} in main app: {e}")
         videos_for_template = []
         flash("Error loading videos from database.", "error")
 
-    app.logger.debug(f"Route /videos/{camera_id}: Displaying {len(videos_for_template)} videos.")
+    app.logger.debug(f"Main app /videos/{camera_id}: Displaying {len(videos_for_template)} videos.")
     return render_template("videos.html", 
                            videos=videos_for_template, 
                            camera_id=camera_id, 
                            username=session['username'], 
                            description=camera.description,
-                           current_sort_by=sort_by_param,
+                           current_sort_by=sort_by_param, # Pass for sort arrows
                            current_sort_order=sort_order_param)
+
+ALLOWED_SORT_COLUMNS_INCIDENTS = { 
+    'id': 'id',
+    'camera_id': 'camera_id',
+    'filename': 'original_video_filename', 
+    'folder': 'incident_folder_name',
+    'timestamp': 'incident_trigger_timestamp' # This is the main timestamp for incidents
+}
 
 @app.route('/incident_videos/<camera_id>')
 @login_required
@@ -995,20 +1035,61 @@ def incident_videos(camera_id): # Route function name is fine
     if camera is None:
         flash(f"Camera {camera_id} not found.", "error")
         return redirect(url_for('camera_list'))
+    
+    sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort by incident trigger timestamp
+    sort_order_param = request.args.get('sort_order', 'desc')
 
-    # Fetch incident videos from the database using the Camera class method
-    incident_videos_list = camera.load_incident_videos_from_database()
+    db_column_to_sort = ALLOWED_SORT_COLUMNS_INCIDENTS.get(sort_by_param, 'incident_trigger_timestamp')
+    sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
+
+    order_by_clause = f"{db_column_to_sort} {sql_sort_order}"
+
+    conn = get_db()
+    cursor = conn.cursor()
     
-    # The list from load_incident_videos_from_database is already sorted.
-    # If you want to add URL-based sorting like for normal videos, you'd implement
-    # similar logic here, querying INCIDENT_TABLE_NAME directly with get_db().
+    if db_column_to_sort == 'incident_trigger_timestamp':
+        order_by_clause += f", original_video_filename {sql_sort_order}" # Sort filename in same direction
+    else:
+        # For other primary sorts, ID is a good unique secondary sort
+        order_by_clause += f", id {sql_sort_order}"
+
+    # Build the query with sorting
+    query = f"""
+        SELECT id, original_video_filename, incident_folder_name, incident_trigger_timestamp, path 
+        FROM {INCIDENT_TABLE_NAME} 
+        WHERE camera_id = ? 
+        ORDER BY {order_by_clause} 
+    """
+    try:
+        cursor.execute(query, (str(camera_id),))
+        raw_incident_videos_list = cursor.fetchall()
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching incidents for cam {camera_id} in main app: {e}")
+        raw_incident_videos_list = []
+        flash("Error loading incident videos from database.", "error")
     
-    app.logger.debug(f"Route /incident_videos/{camera_id}: Displaying {len(incident_videos_list)} incidents from DB.")
+    # Prepare data for the template, including formatted display timestamp
+    incident_videos_for_template = []
+    if raw_incident_videos_list:
+        for incident_row in raw_incident_videos_list:
+            incident_videos_for_template.append({
+                "id": incident_row["id"],
+                "filename": incident_row["original_video_filename"], 
+                "incident_folder": incident_row["incident_folder_name"],
+                "timestamp": incident_row["incident_trigger_timestamp"], 
+                "display_timestamp": format_display_timestamp_sgt(incident_row["incident_trigger_timestamp"]),
+                "path": incident_row["path"]
+            })
+    
+    app.logger.debug(f"Main app /incident_videos/{camera_id}: Displaying {len(incident_videos_for_template)} incidents with ORDER BY {order_by_clause}")
     return render_template("incident_vid.html", 
-                           incident_videos=incident_videos_list, 
+                           incident_videos=incident_videos_for_template, 
                            camera_id=camera_id, 
                            username=session['username'], 
-                           description=camera.description)
+                           description=camera.description,
+                           current_sort_by=sort_by_param,
+                           current_sort_order=sort_order_param
+                           )
 
 @app.route('/settings_page/<camera_id>')
 @login_required

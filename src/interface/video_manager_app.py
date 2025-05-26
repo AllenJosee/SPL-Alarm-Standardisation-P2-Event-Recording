@@ -2,6 +2,8 @@ from flask import Flask, render_template, jsonify, send_from_directory, request,
 import sqlite3
 import os
 import logging
+import datetime
+from dateutil import parser
 
 # --- Path Setup ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +50,39 @@ def get_db():
         db.row_factory = sqlite3.Row # Access columns by name
     return db
 
+def format_display_timestamp(iso_timestamp_str_utc): # Input is assumed to be UTC ISO string
+    """Helper to parse UTC ISO timestamp and format for display in Singapore Time (SGT, UTC+8)."""
+    if not iso_timestamp_str_utc:
+        return "N/A"
+    try:
+        # Parse the ISO string. parser.isoparse should correctly handle 'Z' or '+00:00' as UTC.
+        dt_object_utc = parser.isoparse(iso_timestamp_str_utc)
+
+        # Ensure it's timezone-aware and set to UTC if it's naive (though isoparse usually handles Z)
+        if dt_object_utc.tzinfo is None or dt_object_utc.tzinfo.utcoffset(dt_object_utc) is None:
+            dt_object_utc = dt_object_utc.replace(tzinfo=datetime.timezone.utc)
+        else:
+            # If it already has timezone info, convert it to UTC first to be sure
+            dt_object_utc = dt_object_utc.astimezone(datetime.timezone.utc)
+
+        # Define Singapore Timezone (SGT = UTC+8)
+        sgt_timezone = datetime.timezone(datetime.timedelta(hours=8))
+
+        # Convert UTC datetime object to SGT
+        dt_object_sgt = dt_object_utc.astimezone(sgt_timezone)
+
+        # Format for display in SGT
+        return dt_object_sgt.strftime("%Y-%m-%d %H:%M:%S SGT") # Example: 2025-05-26 13:25:15 SGT
+        # Or a more friendly format:
+        # return dt_object_sgt.strftime("%Y-%m-%d %I:%M:%S %p SGT") # Example: 2025-05-26 01:25:15 PM SGT
+
+    except (ValueError, TypeError) as e:
+        app.logger.warning(f"Could not parse/convert timestamp: '{iso_timestamp_str_utc}'. Error: {e}")
+        return iso_timestamp_str_utc # Return original if parsing/conversion fails
+    except Exception as e_gen: # Catch any other unexpected errors
+        app.logger.error(f"Unexpected error formatting timestamp '{iso_timestamp_str_utc}': {e_gen}")
+        return iso_timestamp_str_utc
+
 @app.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, '_database', None)
@@ -59,53 +94,69 @@ def show_recordings_page():
     conn = get_db()
     cursor = conn.cursor()
 
+    # Initialize data to be passed to template
+    unique_camera_ids = []
+    recordings_data_processed = [] # This will hold the final list for the template
+    query_params = [] # Initialize query_params
+
+    # 1. Fetch Unique Camera IDs for Filter Dropdown
     try:
         cursor.execute(f"SELECT DISTINCT camera_id FROM {TABLE_NAME} ORDER BY camera_id ASC")
-        # Fetchall returns list of tuples, e.g., [('1',), ('2',)]
-        # We want a list of strings/integers: ['1', '2']
         unique_camera_ids_tuples = cursor.fetchall()
         unique_camera_ids = [item['camera_id'] for item in unique_camera_ids_tuples] 
     except sqlite3.Error as e:
-        app.logger.error(f"Database error fetching unique camera IDs: {e}")
-        unique_camera_ids = []
+        app.logger.error(f"Database error fetching unique camera IDs for recordings: {e}")
+        # unique_camera_ids remains []
 
+    # 2. Get Request Arguments for Sorting and Filtering
     sort_by_param = request.args.get('sort_by', 'timestamp')
     sort_order_param = request.args.get('sort_order', 'desc')
+    filter_camera_id_param = request.args.get('filter_camera_id', '')
+
+    # 3. Build SQL Query
     db_column_to_sort_by = ALLOWED_SORT_COLUMNS_RECORDINGS.get(sort_by_param, 'timestamp')
     sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
-
-
-    # --- Filtering Parameter ---
-    filter_camera_id_param = request.args.get('filter_camera_id', '') # Default to empty string (show all)
-
-    # --- Build SQL Query ---
+    
     base_query = f"SELECT id, camera_id, filename, timestamp, path FROM {TABLE_NAME}"
     where_clauses = []
-    query_params = []
+    # query_params is already initialized
 
     if filter_camera_id_param and filter_camera_id_param != 'all':
         where_clauses.append("camera_id = ?")
-        query_params.append(filter_camera_id_param)
+        query_params.append(filter_camera_id_param) # Populate query_params
     
+    sql_where_clause = ""
     if where_clauses:
         sql_where_clause = " WHERE " + " AND ".join(where_clauses)
-    else:
-        sql_where_clause = ""
-
-    final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}"
     
-    app.logger.info(f"Executing query: {final_query} with params: {query_params}")
+    # Define final_query here, once, before it's used for execution
+    final_query = f"{base_query}{sql_where_clause} ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}" # Added secondary sort by id
+
+    app.logger.info(f"DEBUG: Attempting to execute recordings query: {final_query} with params: {query_params}") # Add "DEBUG:" prefix
+    
+    # 4. Execute Main Query and Process Data
     try:
-        cursor.execute(final_query, tuple(query_params)) # Pass params as a tuple
-        recordings_data = cursor.fetchall()
+        cursor.execute(final_query, tuple(query_params)) # Execute the built query
+        recordings_raw_data = cursor.fetchall()
+        
+        for row in recordings_raw_data: # Process the raw data
+            recordings_data_processed.append({
+                "id": row["id"],
+                "camera_id": row["camera_id"],
+                "filename": row["filename"],
+                "timestamp": row["timestamp"], # ISO string from DB
+                "display_timestamp": format_display_timestamp(row["timestamp"]), # Formatted
+                "path": row["path"]
+            })
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching recordings from {TABLE_NAME}: {e}")
-        recordings_data = []
+        # recordings_data_processed remains []
     
+    # 5. Render Template
     return render_template('recordings_view.html', 
-                           recordings=recordings_data,
-                           unique_camera_ids=unique_camera_ids, # Pass unique IDs to template
-                           current_filter_camera_id=filter_camera_id_param, # Pass current filter
+                           recordings=recordings_data_processed, # Pass the processed list
+                           unique_camera_ids=unique_camera_ids,
+                           current_filter_camera_id=filter_camera_id_param,
                            current_sort_by=sort_by_param,
                            current_sort_order=sort_order_param)
 
@@ -193,43 +244,39 @@ def delete_video_entry(recording_id):
 
 
 @app.route('/incidents')
-@app.route('/incidents')
-def show_incidents_page():
+def show_incidents_page(): # Removed duplicate @app.route('/incidents')
     conn = get_db()
     cursor = conn.cursor()
 
-    # --- Get Unique Camera IDs for Incident Filter Dropdown ---
+    # Initialize data
+    unique_camera_ids_incident = []
+    incidents_data_processed = [] # For final processed data
+    query_params_incident = []    # Initialize
+
+    # 1. Fetch Unique Camera IDs for Incident Filter
     try:
-        # Query DISTINCT camera_id from the INCIDENT_TABLE_NAME
         cursor.execute(f"SELECT DISTINCT camera_id FROM {INCIDENT_TABLE_NAME} ORDER BY camera_id ASC")
         unique_camera_ids_tuples_incident = cursor.fetchall()
         unique_camera_ids_incident = [item['camera_id'] for item in unique_camera_ids_tuples_incident]
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching unique camera IDs for incidents: {e}")
-        unique_camera_ids_incident = []
 
-    # --- Sorting Parameters ---
-    sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort for incidents
+    # 2. Get Request Arguments
+    sort_by_param = request.args.get('sort_by', 'timestamp')
     sort_order_param = request.args.get('sort_order', 'desc')
+    filter_camera_id_param = request.args.get('filter_camera_id', '')
     
-    # Use the incident-specific whitelist
+    # 3. Build SQL Query for Incidents
     db_column_to_sort_by = ALLOWED_SORT_COLUMNS_INCIDENTS.get(sort_by_param, 'incident_trigger_timestamp')
+    sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
-    if sort_order_param.lower() not in ['asc', 'desc']:
-        sort_order_param = 'desc'
-    sql_sort_order = sort_order_param.upper()
-
-    # --- Filtering Parameter ---
-    filter_camera_id_param = request.args.get('filter_camera_id', '') # Default to empty (show all)
-
-    # --- Build SQL Query for Incidents ---
     base_query_incident = f"SELECT id, camera_id, original_video_filename, incident_trigger_timestamp, incident_folder_name, path FROM {INCIDENT_TABLE_NAME}"
     where_clauses_incident = []
-    query_params_incident = []
+    # query_params_incident is already initialized
 
     if filter_camera_id_param and filter_camera_id_param != 'all':
         where_clauses_incident.append("camera_id = ?")
-        query_params_incident.append(filter_camera_id_param)
+        query_params_incident.append(filter_camera_id_param) # Populate query_params_incident
     
     sql_where_clause_incident = ""
     if where_clauses_incident:
@@ -238,16 +285,30 @@ def show_incidents_page():
     final_query_incident = f"{base_query_incident}{sql_where_clause_incident} ORDER BY {db_column_to_sort_by} {sql_sort_order}, id {sql_sort_order}"
     
     app.logger.info(f"Executing incidents query: {final_query_incident} with params: {query_params_incident}")
+    
+    # 4. Execute Main Query and Process Data
     try:
         cursor.execute(final_query_incident, tuple(query_params_incident))
-        incidents_data = cursor.fetchall()
+        incidents_raw_data = cursor.fetchall()
+        
+        for row in incidents_raw_data: # Process raw data
+            incidents_data_processed.append({
+                "id": row["id"],
+                "camera_id": row["camera_id"],
+                "original_video_filename": row["original_video_filename"],
+                "incident_folder_name": row["incident_folder_name"],
+                "incident_trigger_timestamp": row["incident_trigger_timestamp"],
+                "display_timestamp": format_display_timestamp(row["incident_trigger_timestamp"]),
+                "path": row["path"]
+            })
     except sqlite3.Error as e:
         app.logger.error(f"Database error fetching incidents from {INCIDENT_TABLE_NAME}: {e}")
-        incidents_data = []
+        # incidents_data_processed remains []
     
+    # 5. Render Template
     return render_template('incidents_view.html',
-                           incidents=incidents_data,
-                           unique_camera_ids_incident=unique_camera_ids_incident, # Pass incident-specific camera IDs
+                           incidents=incidents_data_processed, # Pass processed list
+                           unique_camera_ids_incident=unique_camera_ids_incident,
                            current_filter_camera_id=filter_camera_id_param,
                            current_sort_by=sort_by_param,
                            current_sort_order=sort_order_param)

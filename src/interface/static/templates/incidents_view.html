@@ -121,7 +121,7 @@
                 <td>{{ incident.camera_id }}</td>
                 <td>{{ incident.original_video_filename }}</td>
                 <td>{{ incident.incident_folder_name }}</td>
-                <td>{{ incident.incident_trigger_timestamp }}</td>
+                <td>{{ incident.display_timestamp }}</td>
                 <td class="actions">
                     <button class="play-btn" data-id="{{ incident.id }}">Play</button>
                     <a href="{{ url_for('download_incident_video_file', incident_id=incident.id) }}" class="button-link download-btn" download>Download</a>
