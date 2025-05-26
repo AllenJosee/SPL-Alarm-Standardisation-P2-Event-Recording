@@ -52,22 +52,18 @@
                    </div>
                     </div>                    
                     <div class="status-circle" id="status-circle"></div>
-                    <div id="status-message" class="status-message"></div>
+                    <div id="status-message" class="status-message"> Status: Idle</div>
                 </div>
             </div>
     <div class="section-divider"></div> 
         <h2 style="text-align: center; padding-top: 15px;">Controls</h2>
             <div class="control-buttons">
-                <form method="POST" action="{{ url_for('start_recording', camera_id=camera_id) }}" onsubmit="showRecordingStatus()">
-                    <button type="submit" class="control-button green">Start Recording</button>
-                </form>
-                <form method="POST" action="{{ url_for('stop_recording', camera_id=camera_id) }}" onsubmit="hideStatus()">
-                    <button type="submit" class="control-button orange">Stop Recording</button>
-                </form>
-                <form method="POST" action="{{ url_for('simulate_incident', camera_id=camera_id) }}" onsubmit="showIncidentStatus()">
-                    <button type="submit" class="control-button red">Simulate Incident</button>
-                </form>
-            </div>
+            <button type="button" class="control-button green" id="start-recording">Start Recording</button>
+            <button type="button" class="control-button orange" id="stop-recording">Stop Recording</button>
+            <form method="POST" action="{{ url_for('simulate_incident', camera_id=camera_id) }}" onsubmit="showIncidentStatus()">
+                <button type="submit" class="control-button red">Simulate Incident</button>
+            </form>
+        </div>
             <div class="section-divider"></div>
 
             
@@ -161,6 +157,55 @@
                 handleFeedError(); // Treat complete but no height as error
                 }
             </script>
+            <script>
+                document.getElementById('start-recording').addEventListener('click', function() {
+                    fetch("{{ url_for('start_recording', camera_id=camera_id) }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest' // Indicate that this is an AJAX request
+                        }
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            showRecordingStatus();
+                            console.log("Recording started successfully.");
+                        } else {
+                            console.error("Failed to start recording.");
+                        }
+                    })
+                    .catch(error => console.error("Error starting recording:", error));
+                });
+
+                document.getElementById('stop-recording').addEventListener('click', function() {
+                    fetch("{{ url_for('stop_recording', camera_id=camera_id) }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest' // Indicate that this is an AJAX request
+                        }
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            hideStatus();
+                            console.log("Recording stopped successfully.");
+                        } else {
+                            console.error("Failed to stop recording.");
+                        }
+                    })
+                    .catch(error => console.error("Error stopping recording:", error));
+                });
+            </script>
+            <script>
+                window.onload = function() {
+                    const recordingStatus = "{{ recording_status }}";  // Get status from Flask
+                    if (recordingStatus === 'recording') {
+                        showRecordingStatus();
+                    } else if (recordingStatus === 'stopped') {
+                        hideStatus();
+                    }
+                };
+            </script>
+
+
     </div>
 </body>
 </html>

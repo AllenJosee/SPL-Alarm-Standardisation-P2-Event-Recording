@@ -347,7 +347,7 @@ if __name__ == '__main__':
         app.logger.error(f"CRITICAL: DATABASE '{DATABASE_NAME}' NOT FOUND AT: {DATABASE_PATH}")
         app.logger.error("Please ensure the database exists and is correctly pathed. You might need to run your main app's init_db() or a setup script.")
     
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
 if __name__ == '__main__':
     app.logger.info(f"--- Video Manager App Starting ---")
@@ -361,4 +361,4 @@ if __name__ == '__main__':
         app.logger.error(f"CRITICAL: DATABASE '{DATABASE_NAME}' NOT FOUND AT: {DATABASE_PATH}")
         app.logger.error("Please ensure the database exists and is correctly pathed.")
     
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5000)
