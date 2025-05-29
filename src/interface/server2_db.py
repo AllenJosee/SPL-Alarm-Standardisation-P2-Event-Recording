@@ -6,35 +6,37 @@ from flask import Flask, render_template, Response, request, redirect, url_for, 
 import os
 import cv2
 import json
-from threading import Thread, Event, Lock
+from threading import Thread, Event, Lock # For concurrent operations (recording, streaming)
 import time
-import shutil
-from functools import wraps
+import shutil # For file operations like deleting directories
+from functools import wraps # For creating decorators (e.g., login_required)
 import atexit
 import sqlite3
 import logging
 import datetime
-from dateutil import parser
+from dateutil import parser # For parsing ISO 8601 timestamps
 
 logging.basicConfig(level=logging.INFO)
 
 # Initialize Flask app
 app = Flask(__name__, template_folder='static/templates')
-app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
+app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'  # Secret key for session management
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# --- Path Configurations ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Directory of the current script
 # SRC_DIR = SPL-Alram-P2-Database/src/
 SRC_DIR = os.path.dirname(SCRIPT_DIR)
 # PROJECT_ROOT_DIR = SPL-Alram-P2-Database/
 PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
 
+# --- Database Configuration ---
 DATABASE_NAME = 'videos.db'
 TABLE_NAME = 'video_metadata'
 INCIDENT_TABLE_NAME = 'incident_video_metadata'
 
 # DATABASE_PATH = SPL-Alram-P2-Database/videos.db
 DATABASE_PATH = os.path.join(PROJECT_ROOT_DIR, DATABASE_NAME)
-app.logger.setLevel(logging.INFO)
+app.logger.setLevel(logging.INFO) # Set Flask app logger level
 
 '''recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
@@ -43,6 +45,7 @@ settings_file = "src/settings.json"'''
 
 # --- Flask Database Helper Functions ---
 def get_db():
+    #Opens a new database connection if there is none yet for the current application context.
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE_PATH)
@@ -101,24 +104,25 @@ def get_latest_recordings(limit=100):
 class Camera:
     #device index=0 -> webcam
     def __init__(self, camera_id, recordings_dir, incidents_dir, settings_file, description="", device_index=0):
-        self.camera_id = str(camera_id)
+        self.camera_id = str(camera_id) # Unique identifier for the camera
         self.recordings_dir = recordings_dir
         self.incidents_dir = incidents_dir
         self.settings_file = settings_file
         self.description = description  # Add description attribute
-        self.device_index = device_index
+        self.device_index = device_index # OpenCV device index (e.g., 0 for default webcam)
         
         self.capture = None
         self.capture_lock = Lock()  # Lock for thread-safe access to capture
-        self.active_feed_clients = 0 
+        self.active_feed_clients = 0  # Counter for active live feed clients
 
         self.recording = False
         self._stop_recording_event = Event()  # Event to signal recording stop
         self.recording_thread = None
         
+        # Ensure directories exist (absolute paths needed for os.makedirs)
         os.makedirs(recordings_dir, exist_ok=True)
         os.makedirs(incidents_dir, exist_ok=True)
-        self.load_settings()
+        self.load_settings() # Load camera-specific settings
 
     def _ensure_capture_initialized(self):
         """Initializes and returns the cv2.VideoCapture object if not already done."""
@@ -130,7 +134,7 @@ class Camera:
                     self.capture = None
                 try:
                     app.logger.info(f"Initializing cv2.VideoCapture for camera {self.camera_id} (device: {self.device_index})...")
-                    self.capture = cv2.VideoCapture(self.device_index)
+                    self.capture = cv2.VideoCapture(self.device_index) # Initialize with device index
                     if not self.capture.isOpened():
                         app.logger.error(f"Error: Could not open video device {self.device_index} for camera {self.camera_id}")
                         self.capture = None
@@ -157,7 +161,7 @@ class Camera:
         app.logger.info(f"FULL release_capture called for camera {self.camera_id}")
         if self.recording:
             # This will internally handle the recording thread and flags
-            self.stop_recording_logic(called_from_release_all=True) 
+            self.stop_recording_logic(called_from_release_all=True)  # Stop recording first
         
         # Ensure capture is released, even if not "recording" but was somehow left open
         with self.capture_lock:
@@ -204,8 +208,8 @@ class Camera:
                 self._release_capture_if_unused()
             return
 
-        self.recording = False # Signal the loop first
-        self._stop_recording_event.set() # Signal event
+        self.recording = False # Signal the recording loop to stop
+        self._stop_recording_event.set() # Set the event to break loops
 
         if self.recording_thread and self.recording_thread.is_alive():
             app.logger.info(f"Waiting for recording thread {self.camera_id} to finish...")
@@ -240,14 +244,14 @@ class Camera:
             data["recordings_dir"],
             data["incidents_dir"],
             data["settings_file"],
-            data.get("description", "")
+            data.get("description", "") # Get description, default to empty string if not present
         )
 
     def load_settings(self):
         if not os.path.exists(self.settings_file):
             default_settings = {
-                "max_videos": 5,
-                "video_duration": 5,  # seconds
+                "max_videos": 5, # Max number of normal recordings to kee
+                "video_duration": 5,  # Duration of each recording segment in seconds
             }
             with open(self.settings_file, "w") as f:
                 json.dump(default_settings, f)
@@ -265,18 +269,18 @@ class Camera:
             query = f"SELECT id, filename, timestamp, path FROM {TABLE_NAME} WHERE camera_id = ? ORDER BY timestamp DESC"
             cursor.execute(query, (str(self.camera_id),)) # Ensure camera_id matches type
             db_videos = cursor.fetchall()
-
+            
             for row in db_videos:
                 # Construct absolute path to check existence and get ctime for display
                 absolute_file_path = os.path.join(PROJECT_ROOT_DIR, row["path"])
                 file_exists = os.path.exists(absolute_file_path)
                 
-                raw_ts_from_file = 0
+                raw_ts_from_file = 0 # Placeholder if file missing
                 display_ts_from_file = "N/A (File Missing)"
                 if file_exists:
                     try:
-                        raw_ts_from_file = os.path.getctime(absolute_file_path)
-                        display_ts_from_file = time.ctime(raw_ts_from_file)
+                        raw_ts_from_file = os.path.getctime(absolute_file_path) #file creation time
+                        display_ts_from_file = time.ctime(raw_ts_from_file) # Convert to human-readable format
                     except Exception as e:
                         app.logger.warning(f"Error getting ctime for {absolute_file_path}: {e}")
                 
@@ -297,7 +301,7 @@ class Camera:
             if conn:
                 conn.close()
         return videos
-
+        
 
     def load_incident_videos_from_database(self):
         """Loads incident video metadata from the database for this camera."""
@@ -321,7 +325,7 @@ class Camera:
                 absolute_file_path = os.path.join(PROJECT_ROOT_DIR, row["path"])
                 file_exists = os.path.exists(absolute_file_path)
                 
-                display_ts = row["incident_trigger_timestamp"] 
+                display_ts = row["incident_trigger_timestamp"] # Use the trigger timestamp
                 if not file_exists:
                     display_ts += " (File Missing)"
 
@@ -329,7 +333,7 @@ class Camera:
                     "id": row["id"], # DB ID of the incident video entry
                     "filename": row["original_video_filename"], # The name of the video file
                     "incident_folder": row["incident_folder_name"],
-                    "timestamp": row["incident_trigger_timestamp"], # Main timestamp for this entry
+                    "timestamp": row["incident_trigger_timestamp"], # ISO 8601 UTC
                     "display_timestamp": display_ts, # For direct display
                     "path": row["path"] # Relative path for serving/deletion
                 })
@@ -350,27 +354,21 @@ class Camera:
             json.dump(self.settings, f)
 
     def record_video(self):
-    # current_capture_for_thread = self._ensure_capture_initialized() # Get the shared capture
-    # No, let _ensure_capture_initialized handle its own locking if it needs to initialize
-    # The critical part is that self.capture is valid *before* we try to use it.
-    # The first call to _ensure_capture_initialized in start_recording_thread makes sure it's ready.
-
-    # The loop will rely on self.capture being valid.
-    # We only need to lock the *read* operations and checks on self.capture.
+        #Core recording loop. Captures video segments and saves them.
 
         app.logger.info(f"Record_video loop started for camera {self.camera_id}.")
         while self.recording and not self._stop_recording_event.is_set():
+            # Timestamp for database (UTC, ISO 8601 format)
             db_timestamp_to_store = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
             
-            # You can keep your existing filename format if you like, 
-            # it doesn't affect DB sorting.
+            # Filename generation (local time for human-readable filenames)
             filename_timestamp_part = time.strftime("%Y%m%d-%H%M%S") 
             filename = f"cam{str(self.camera_id)}_{filename_timestamp_part}.mp4"
             relative_path_for_db = os.path.join(self.recordings_dir, filename)
             absolute_filepath_for_cv = os.path.join(PROJECT_ROOT_DIR, relative_path_for_db)
-            os.makedirs(os.path.dirname(absolute_filepath_for_cv), exist_ok=True)
+            os.makedirs(os.path.dirname(absolute_filepath_for_cv), exist_ok=True) # Ensure directory exists
 
-            fourcc = cv2.VideoWriter_fourcc(*"avc1")
+            fourcc = cv2.VideoWriter_fourcc(*"avc1") # Codec (H.264)
             if not hasattr(self, 'settings') or not self.settings: self.load_settings()
             video_duration_seconds = self.settings.get("video_duration", 5)
             fps = 15 
@@ -403,10 +401,11 @@ class Camera:
                 frame_count = 0
                 total_frames_to_record = int(fps * video_duration_seconds)
 
+                # --- Segment recording loop ---
                 while self.recording and not self._stop_recording_event.is_set() and frame_count < total_frames_to_record:
                     frame_read_successfully = False
                     frame_data = None
-                    with self.capture_lock: # Lock for reading the frame
+                    with self.capture_lock: # Lock for reading the frame from shared capture
                         if not self.capture or not self.capture.isOpened():
                             app.logger.error(f"Cam {self.camera_id}: SHARED capture lost during segment write.")
                             self.recording = False; break # Break inner loop
@@ -421,7 +420,7 @@ class Camera:
                         out.write(frame_data); frame_count += 1
                     elif self.recording: # Only log warning if we are supposed to be recording
                         app.logger.warning(f"Cam {self.camera_id}: Failed to read frame from shared capture during RECORDING segment."); time.sleep(0.05)
-                
+                # If recording stopped externally (e.g., stop_recording call)                
                 if not self.recording or self._stop_recording_event.is_set(): # If outer loop broke due to recording flag
                     if out.isOpened(): out.release() # Ensure writer is released
                     break # Break from the segment writing loop too
@@ -434,9 +433,8 @@ class Camera:
                     self.insert_video_metadata(filename, db_timestamp_to_store, relative_path_for_db)                    
                     self.prune_videos_from_database()
                 else:
-                    # ... (rest of your existing empty file handling logic) ...
                     app.logger.warning(f"Cam {self.camera_id}: No frames recorded for {filename}. Not saving to DB or pruning.")
-                    if os.path.exists(absolute_filepath_for_cv):
+                    if os.path.exists(absolute_filepath_for_cv): # Delete empty file
                         try:
                             os.remove(absolute_filepath_for_cv)
                             app.logger.info(f"Cam {self.camera_id}: Removed empty/failed file {absolute_filepath_for_cv}")
@@ -453,12 +451,13 @@ class Camera:
         conn = None
         try:
             if not hasattr(self, 'settings') or not self.settings: self.load_settings()
-            max_videos = self.settings.get("max_videos", 5)
+            max_videos = self.settings.get("max_videos", 5)  # Default if not set
 
             conn = sqlite3.connect(DATABASE_PATH)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
+            # Select videos for this camera, ordered oldest first (ASC timestamp)
             query_select = f"SELECT id, path FROM {TABLE_NAME} WHERE camera_id = ? ORDER BY timestamp ASC" # Oldest first
             cursor.execute(query_select, (str(self.camera_id),))
             all_camera_videos_in_db = cursor.fetchall()
@@ -468,7 +467,7 @@ class Camera:
 
             if num_videos_in_db > max_videos:
                 num_to_delete = num_videos_in_db - max_videos
-                videos_to_delete = all_camera_videos_in_db[:num_to_delete]
+                videos_to_delete = all_camera_videos_in_db[:num_to_delete] # Get the oldest ones
                 app.logger.info(f"[PruneDB Cam {self.camera_id}] Deleting {len(videos_to_delete)} oldest video(s).")
 
                 for video_entry in videos_to_delete:
@@ -476,6 +475,7 @@ class Camera:
                     relative_path = video_entry["path"]
                     absolute_file_path_to_delete = os.path.join(PROJECT_ROOT_DIR, relative_path)
 
+                    # Delete physical file
                     if os.path.exists(absolute_file_path_to_delete):
                         try:
                             os.remove(absolute_file_path_to_delete)
@@ -485,12 +485,13 @@ class Camera:
                     else:
                         app.logger.warning(f"[PruneDB Cam {self.camera_id}] File {absolute_file_path_to_delete} not found for (DB ID: {db_id_to_delete})")
                     
+                    # Delete DB entry                    
                     query_delete_db = f"DELETE FROM {TABLE_NAME} WHERE id = ?"
                     cursor.execute(query_delete_db, (db_id_to_delete,))
                 conn.commit()
                 app.logger.info(f"[PruneDB Cam {self.camera_id}] DB entries deleted.")
         except sqlite3.Error as e:
-            if conn: conn.rollback()
+            if conn: conn.rollback() # Rollback on DB error
             app.logger.error(f"[PruneDB Cam {self.camera_id}] SQLite Error: {e}")
         except Exception as e:
             app.logger.error(f"[PruneDB Cam {self.camera_id}] General Error: {e}")
@@ -500,7 +501,7 @@ class Camera:
         
     def insert_video_metadata(self, filename, timestamp_str, relative_path_to_project_root):
         """Inserts video metadata into the database.
-        'relative_path_to_project_root' is the path like 'src/recordings/camera1/file.mp4'
+        'relative_path_to_project_root' :  'src/recordings/camera1/file.mp4'
         """
         conn = None
         try:
@@ -510,6 +511,7 @@ class Camera:
                 INSERT INTO {TABLE_NAME} (camera_id, filename, timestamp, path)
                 VALUES (?, ?, ?, ?)
             """
+            # timestamp_str should be ISO 8601 UTC
             cursor.execute(query, (str(self.camera_id), filename, timestamp_str, relative_path_to_project_root))
             conn.commit()
             app.logger.debug(f"DB Insert for Camera {self.camera_id}: File={filename}, Path={relative_path_to_project_root}")
@@ -531,6 +533,7 @@ class Camera:
                 (camera_id, incident_trigger_timestamp, original_video_filename, original_video_timestamp, incident_folder_name, path)
                 VALUES (?, ?, ?, ?, ?, ?)
             """
+            # incident_trigger_ts and original_ts should be ISO 8601 UTC
             cursor.execute(query, (
                 str(self.camera_id),
                 incident_trigger_ts,
@@ -548,7 +551,7 @@ class Camera:
             if conn: conn.close()
 
     def get_videos_by_camera(camera_id):
-        conn = sqlite3.connect('videos.db')
+        conn = sqlite3.connect('videos.db') # Should use DATABASE_PATH
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM video_metadata WHERE camera_id = ?', (camera_id,))
         videos = cursor.fetchall()
@@ -558,6 +561,8 @@ class Camera:
     
         
     def simulate_incident(self):
+        """Simulates an incident: creates an incident folder and copies recent normal recordings to it."""
+        # Timestamp for the incident event itself (UTC, ISO 8601)
         incident_trigger_iso_timestamp_for_db = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()        
         incident_folder_timestamp_part = time.strftime("%Y%m%d-%H%M%S")
         incident_folder_name_only = f"cam{str(self.camera_id)}_incident_{incident_folder_timestamp_part}"
@@ -579,7 +584,7 @@ class Camera:
 
             original_relative_path = video_data["path"] # e.g., "src/recordings/camera1/video.mp4"
             original_filename = video_data["filename"]
-            original_timestamp_from_db = video_data["timestamp"] # YYYYMMDD-HHMMSS format
+            original_timestamp_from_db = video_data["timestamp"] # ISO 8601 UTC from normal recording DB
 
             source_absolute_path = os.path.join(PROJECT_ROOT_DIR, original_relative_path)
             
@@ -595,7 +600,7 @@ class Camera:
                     
                     # Insert metadata for the copied incident video
                     self.insert_incident_video_metadata(
-                        incident_trigger_iso_timestamp_for_db,
+                        incident_trigger_iso_timestamp_for_db, # Timestamp of incident creation
                         original_filename,
                         original_timestamp_from_db, # Store original video's timestamp
                         incident_folder_name_only,  # Just the folder name part
@@ -611,17 +616,11 @@ class Camera:
     def generate_video_feed(self):
         app.logger.info(f"Attempting to generate live feed for camera {self.camera_id}")
 
-        local_capture_ref = self._ensure_capture_initialized() # Ensures capture is ready
+        local_capture_ref = self._ensure_capture_initialized() # Ensures shared capture is ready
 
         if not local_capture_ref or not local_capture_ref.isOpened(): # Check the reference returned
             app.logger.error(f"Error: Could not get/initialize shared capture for LIVE FEED on camera {self.camera_id}")
-            # Optionally yield a placeholder image or just return
-            # For now, let's just return if capture fails.
-            # A black frame could be:
-            # import numpy as np
-            # black_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            # _, buffer = cv2.imencode(".jpg", black_frame)
-            # yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+            # Could yield a placeholder "error" image here            
             return 
 
         with self.capture_lock: # Increment client count under lock
@@ -635,7 +634,7 @@ class Camera:
                 with self.capture_lock: # Lock for reading from shared capture
                     if not self.capture or not self.capture.isOpened(): # Check shared self.capture
                         app.logger.error(f"Error: Camera {self.camera_id} SHARED capture lost during LIVE FEED.")
-                        break
+                        break # Exit loop if capture is lost
                     ret, current_frame = self.capture.read() # Read from shared self.capture
                     if ret:
                         frame_data = current_frame.copy() # Important: copy the frame for further processing
@@ -644,32 +643,32 @@ class Camera:
                 if not frame_available:
                     app.logger.warning(f"Warning: Could not read frame from camera {self.camera_id} (shared capture) for LIVE FEED.")
                     time.sleep(0.1) # Avoid busy-looping
-                    # If the client is still connected, we should continue trying,
-                    # or send a placeholder. For now, continue.
-                    continue
+                    continue # Try reading again
 
-                # Process frame_data (which is a copy)
+                # Add recording indicator (red rectangle) if camera is currently recording                
                 if self.recording: # Check recording status
-                    cv2.rectangle(frame_data, (0, 0), (frame_data.shape[1] - 1, frame_data.shape[0] - 1), (0, 0, 255), 10)
+                    cv2.rectangle(frame_data, (0, 0), (frame_data.shape[1] - 1, frame_data.shape[0] - 1), (0, 0, 255), 10)  # BGR color
 
                 _, buffer = cv2.imencode(".jpg", frame_data)
                 if buffer is None:
                     app.logger.warning(f"Warning: cv2.imencode failed for LIVE FEED camera {self.camera_id}")
                     continue
                 frame_bytes = buffer.tobytes()
+
+                # Yield frame for MJPEG stream
                 try:
                     yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-                except GeneratorExit:
+                except GeneratorExit:  # Client disconnected
                     app.logger.info(f"Client disconnected from live feed for camera {self.camera_id}.")
                     break 
-                except Exception as e_yield:
+                except Exception as e_yield: # Other error during yield
                     app.logger.error(f"Error yielding frame for camera {self.camera_id} live feed: {e_yield}")
                     break
-                time.sleep(1/30) # Add a small delay to control frame rate if necessary, e.g. 30fps
+                time.sleep(1/30) # Approximate frame rate control (e.g., 30fps)
         except Exception as e_feed:
             app.logger.error(f"Exception in generate_video_feed for camera {self.camera_id}: {e_feed}")
         finally:
-            with self.capture_lock: # Decrement client count under lock
+            with self.capture_lock:  # Decrement client count and attempt to release capture if no longer needed
                 self.active_feed_clients -= 1
             app.logger.info(f"Live feed generation ended for camera {self.camera_id}. Active clients: {self.active_feed_clients}")
             self._release_capture_if_unused() # Attempt to release capture if no longer needed
@@ -677,19 +676,20 @@ class Camera:
 def format_display_timestamp_sgt(iso_timestamp_str_utc):
         """Converts UTC ISO timestamp string to SGT display string."""
         if not iso_timestamp_str_utc:
-            return "N/A"
-        try:
-            dt_object_utc = parser.isoparse(iso_timestamp_str_utc)
-            # Ensure it's UTC
+            return "N/A" # Handle empty or None timestamps
+        try: 
+            dt_object_utc = parser.isoparse(iso_timestamp_str_utc) # Parse the ISO string
+            # Ensure it's UTC 
             if dt_object_utc.tzinfo is None or dt_object_utc.tzinfo.utcoffset(dt_object_utc) is None:
                 dt_object_utc = dt_object_utc.replace(tzinfo=datetime.timezone.utc)
             else:
-                dt_object_utc = dt_object_utc.astimezone(datetime.timezone.utc)
+                dt_object_utc = dt_object_utc.astimezone(datetime.timezone.utc) #Convert to UTC if already aware
             
+            # Define SGT timezone (UTC+8)
             sgt_timezone = datetime.timezone(datetime.timedelta(hours=8))
             dt_object_sgt = dt_object_utc.astimezone(sgt_timezone)
             
-            # Choose your desired SGT display format
+            # Format for display
             return dt_object_sgt.strftime("%Y-%m-%d %H:%M:%S SGT") 
             # Or for "Mon May 26 10:22:30 2025 SGT" format:
             # return dt_object_sgt.strftime("%a %b %d %H:%M:%S %Y SGT") 
@@ -699,6 +699,7 @@ def format_display_timestamp_sgt(iso_timestamp_str_utc):
 
 
 def save_cameras_to_json():
+         #Saves the current 'cameras' dictionary (Camera objects) to 'cameras.json'
         camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
         print("Saving cameras to JSON:", camera_data)  # Debugging line
         with open('cameras.json', 'w') as f:
@@ -707,7 +708,7 @@ def save_cameras_to_json():
     
 def load_cameras_from_json():
     global cameras
-    cameras = {} # Start fresh
+    cameras = {} # Initialize/clear existing cameras
     filepath = 'cameras.json'
     if os.path.exists(filepath):
         try:
@@ -733,6 +734,7 @@ def load_cameras_from_json():
 
 load_cameras_from_json()
 
+# --- User Authentication ---
 #Load users
 def validate_user(username, password):
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -743,8 +745,9 @@ def validate_user(username, password):
         with open(users_path) as f:
             data = json.load(f)
             print("DEBUG - Loaded data:", data)  # Debugging line
-            
-        users = data.get('users', [])
+             
+        users = data.get('users', []) # Get the list of users
+        # Check if any user in the list matches the provided username and password
         return any(
             user.get('username') == username.strip() and 
             user.get('password') == password.strip()
@@ -759,9 +762,9 @@ def validate_user(username, password):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('authenticated'):
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
+        if not session.get('authenticated'): # Check session for authentication flag
+            return redirect(url_for('login')) # Redirect to login page if not authenticated
+        return f(*args, **kwargs) # Proceed to the original function if authenticated
     return decorated_function
 
 
@@ -780,11 +783,11 @@ def login():
         password = request.form['password'].strip()
         
         if validate_user(username, password):
-            session['authenticated'] = True
-            session['username'] = username
-            return redirect(url_for('camera_list'))
+            session['authenticated'] = True # Set session flag
+            session['username'] = username # Store username in session
+            return redirect(url_for('camera_list')) # Redirect to camera list on successful login
         error = 'Invalid credentials. Please try again.'
-    return render_template('login.html', error = error)
+    return render_template('login.html', error = error) # Display login form with error if any
 
 @app.route('/index/<camera_id>')
 @login_required
@@ -792,7 +795,8 @@ def index(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         return "Camera not found", 404
-
+    
+    # Get recording status from session to reflect current state on page load
     recording_status = session.get('recording_status', 'stopped')  # Default to 'stopped'
     return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description, recording_status=recording_status)
 
@@ -811,7 +815,7 @@ def add_camera():
     if request.method == 'POST':
         description = request.form.get('description', '').strip()
         
-        next_id_int = 1
+        next_id_int = 1 # Determine the next available integer ID for the camera
         if cameras: 
             numeric_ids = []
             for key in cameras.keys():
@@ -836,13 +840,12 @@ def add_camera():
                     settings_file=f"src/settings_camera{camera_id_key}.json",
                     description=description
                 )
-                cameras[camera_id_key] = new_camera
+                cameras[camera_id_key] = new_camera # Add to in-memory dictionary
                 save_cameras_to_json()  # Save the updated cameras to JSON
                 return redirect(url_for('camera_list'))
             except Exception as e: 
                 print(f"Error creating camera {camera_id_key}: {e}")
                 error = "An unexpected error occurred while adding the camera."
-                return render_template('add_camera.html', error=error)
 
     return render_template('add_camera.html', error =error)
 
@@ -852,7 +855,7 @@ def add_camera():
 def delete_camera(camera_id):
     if camera_id in cameras:
         camera_to_delete = cameras[camera_id]
-        camera_to_delete.release_capture()
+        camera_to_delete.release_capture() # Release hardware resources first
 
         # Get paths before deleting the camera object from the 'cameras' dictionary
         recordings_path_to_remove = camera_to_delete.recordings_dir 
@@ -868,12 +871,10 @@ def delete_camera(camera_id):
             save_cameras_to_json()
             app.logger.info(f"Camera object for ID {camera_id_for_db} removed from memory and cameras.json.")
 
-            # 2. Delete physical folders and files
-            # Note: recordings_path_to_remove is relative to PROJECT_ROOT_DIR
-            # We need the absolute path for shutil.rmtree
+            # 2. Delete physical folders and files (using absolute paths)
             absolute_recordings_path = os.path.join(PROJECT_ROOT_DIR, recordings_path_to_remove)
             if os.path.exists(absolute_recordings_path): # Check absolute path
-                shutil.rmtree(absolute_recordings_path)
+                shutil.rmtree(absolute_recordings_path)  # Recursively delete directory
                 app.logger.info(f"Successfully deleted recordings directory: {absolute_recordings_path}")
             else:
                 app.logger.warning(f"Recordings directory not found, skipping deletion: {absolute_recordings_path}")
@@ -885,8 +886,6 @@ def delete_camera(camera_id):
             else:
                 app.logger.warning(f"Incidents directory not found, skipping deletion: {absolute_incidents_path}")
 
-            # Settings file is likely relative to where the app runs (src/interface/) or PROJECT_ROOT_DIR
-            # If settings_file is stored like "src/settings_camera1.json", then join with PROJECT_ROOT_DIR
             absolute_settings_path = os.path.join(PROJECT_ROOT_DIR, settings_path_to_remove)
             if settings_path_to_remove and os.path.exists(absolute_settings_path):
                 os.remove(absolute_settings_path)
@@ -894,7 +893,7 @@ def delete_camera(camera_id):
             else:
                 app.logger.warning(f"Settings file not found or path invalid, skipping deletion: {absolute_settings_path}")
 
-            # 3. <<< NEW: Delete corresponding video metadata from the database >>>
+            # 3. Delete corresponding video metadata from the database
             conn = None
             try:
                 conn = sqlite3.connect(DATABASE_PATH)
@@ -906,7 +905,7 @@ def delete_camera(camera_id):
                 deleted_recordings_count = cursor.rowcount
                 app.logger.info(f"Deleted {deleted_recordings_count} entries from {TABLE_NAME} for cam_id: {camera_id_for_db}")
 
-                # <<< NEW: Delete from incident_video_metadata >>>
+                # Delete from incident_video_metadata 
                 query_delete_incidents = f"DELETE FROM {INCIDENT_TABLE_NAME} WHERE camera_id = ?"
                 cursor.execute(query_delete_incidents, (camera_id_for_db,))
                 deleted_incidents_count = cursor.rowcount
@@ -935,7 +934,9 @@ def delete_camera(camera_id):
     flash(f"Camera {camera_id} not found.", "warning")
     return "Camera not found", 404
 
+
 @app.route('/feed_view')
+#Placeholder for feed view, can be used to show live feeds or camera status
 @login_required
 def feed_view():
     if not session.get('authenticated'):
@@ -949,7 +950,7 @@ def logout():
         for camera_id, camera in cameras.items():
             if isinstance(camera, Camera):
                 try:
-                    camera.release_capture()
+                    camera.release_capture() # Force release
                 except Exception as e:
                     print(f"Error releasing camera {camera_id} during logout: {e}")
         print("Finished attempting camera releases for logout.")
@@ -960,7 +961,6 @@ def logout():
     return redirect(url_for('login'))
 
 
-# Flask routes and functions
 @app.route('/videos/<camera_id>')
 @login_required
 def videos(camera_id):
@@ -973,8 +973,9 @@ def videos(camera_id):
     sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort by DB timestamp
     sort_order_param = request.args.get('sort_order', 'desc') # Default descending
 
+    # Whitelist for incident video sort columns (maps query param to DB column name)
     allowed_sort_columns_videos = {'id': 'id', 'camera_id': 'camera_id', 'filename': 'filename', 'timestamp': 'timestamp'}
-    db_column_to_sort = allowed_sort_columns_videos.get(sort_by_param, 'timestamp')
+    db_column_to_sort = allowed_sort_columns_videos.get(sort_by_param, 'timestamp') # Fallback to 'timestamp'
     sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
     # Fetch videos from database for this camera with sorting
@@ -987,8 +988,8 @@ def videos(camera_id):
         ORDER BY {db_column_to_sort} {sql_sort_order}
     """
     try:
-        cursor.execute(query, (str(camera_id),))
-        videos_from_db = cursor.fetchall() # List of Row objects
+        cursor.execute(query, (str(camera_id),)) # camera_id is string
+        videos_from_db = cursor.fetchall() # List of sqlite3.Row objects
         
         # Prepare data for template (similar to Camera.load_videos_from_database logic for display_timestamp)
         videos_for_template = []
@@ -1019,13 +1020,13 @@ def videos(camera_id):
                            description=camera.description,
                            current_sort_by=sort_by_param, # Pass for sort arrows
                            current_sort_order=sort_order_param)
-
+# Whitelist for incident video sort columns (maps query param to DB column name)
 ALLOWED_SORT_COLUMNS_INCIDENTS = { 
     'id': 'id',
     'camera_id': 'camera_id',
     'filename': 'original_video_filename', 
     'folder': 'incident_folder_name',
-    'timestamp': 'incident_trigger_timestamp' # This is the main timestamp for incidents
+    'timestamp': 'incident_trigger_timestamp' # main timestamp for incidents
 }
 
 @app.route('/incident_videos/<camera_id>')
@@ -1037,11 +1038,12 @@ def incident_videos(camera_id): # Route function name is fine
         return redirect(url_for('camera_list'))
     
     sort_by_param = request.args.get('sort_by', 'timestamp') # Default sort by incident trigger timestamp
-    sort_order_param = request.args.get('sort_order', 'desc')
+    sort_order_param = request.args.get('sort_order', 'desc') # Default: descending
 
     db_column_to_sort = ALLOWED_SORT_COLUMNS_INCIDENTS.get(sort_by_param, 'incident_trigger_timestamp')
     sql_sort_order = 'DESC' if sort_order_param.lower() == 'desc' else 'ASC'
 
+    # Secondary sort for consistent ordering if primary sort values are the same
     order_by_clause = f"{db_column_to_sort} {sql_sort_order}"
 
     conn = get_db()
@@ -1050,8 +1052,7 @@ def incident_videos(camera_id): # Route function name is fine
     if db_column_to_sort == 'incident_trigger_timestamp':
         order_by_clause += f", original_video_filename {sql_sort_order}" # Sort filename in same direction
     else:
-        # For other primary sorts, ID is a good unique secondary sort
-        order_by_clause += f", id {sql_sort_order}"
+        order_by_clause += f", id {sql_sort_order}" # Default secondary sort by DB ID
 
     # Build the query with sorting
     query = f"""
@@ -1076,8 +1077,8 @@ def incident_videos(camera_id): # Route function name is fine
                 "id": incident_row["id"],
                 "filename": incident_row["original_video_filename"], 
                 "incident_folder": incident_row["incident_folder_name"],
-                "timestamp": incident_row["incident_trigger_timestamp"], 
-                "display_timestamp": format_display_timestamp_sgt(incident_row["incident_trigger_timestamp"]),
+                "timestamp": incident_row["incident_trigger_timestamp"],  # Raw ISO 8601 UTC
+                "display_timestamp": format_display_timestamp_sgt(incident_row["incident_trigger_timestamp"]), # Formatted
                 "path": incident_row["path"]
             })
     
@@ -1099,6 +1100,7 @@ def settings_page(camera_id):
         return "Camera not found", 404
     current_settings = {}
     try:
+        # Attempt to load current settings from the camera's settings file
         with open(camera.settings_file, 'r') as f:
             current_settings = json.load(f)
     except Exception as e:
@@ -1124,7 +1126,8 @@ def update_settings(camera_id):
     error = None 
     validated_max_videos = None
     validated_video_duration = None
-
+    
+    # Validate inputs
     if not max_videos_str:
         error = "Max Videos value cannot be empty."
     elif not video_duration_str:
@@ -1143,6 +1146,7 @@ def update_settings(camera_id):
 
     if error:
         flash(error, 'error')
+        # Reload settings page with current (old) settings displayed
         current_settings = {
             "max_videos": camera.settings.get("max_videos", 5),
             "video_duration": camera.settings.get("video_duration", 5)
@@ -1160,7 +1164,7 @@ def update_settings(camera_id):
     except Exception as e:
         print(f"ERROR during update_settings call for Camera {camera_id}: {e}")
         flash("An unexpected error occurred while updating settings.", 'error')
-        current_settings = camera.settings
+        current_settings = camera.settings # Show existing settings on error
         return render_template('settings.html', camera_id=camera_id, current_settings=current_settings), 500 # Internal Server Error
 
 
@@ -1225,7 +1229,7 @@ def serve_main_recorded_video(video_db_id):
     cursor = db.cursor()
     query = f"SELECT path, filename FROM {TABLE_NAME} WHERE id = ?"
     cursor.execute(query, (video_db_id,))
-    video_data = cursor.fetchone()
+    video_data = cursor.fetchone() # Fetches as a Row object
 
     if not video_data:
         app.logger.error(f"Serve: Video ID {video_db_id} not in DB.")
@@ -1264,7 +1268,7 @@ def serve_main_incident_video(incident_db_id):
     
     relative_path_from_db = incident_data["path"]
     directory_to_serve_from = os.path.join(PROJECT_ROOT_DIR, os.path.dirname(relative_path_from_db))
-    filename_on_disk = os.path.basename(relative_path_from_db)
+    filename_on_disk = os.path.basename(relative_path_from_db)  # actual filename on disk
     
     app.logger.info(f"Serve Incident: ID={incident_db_id}, Dir='{directory_to_serve_from}', File='{filename_on_disk}'")
     try:
@@ -1284,6 +1288,7 @@ def delete_main_recorded_video(video_db_id):
     db = get_db()
     cursor = db.cursor()
     
+    # First, get the path to delete the file
     query_select = f"SELECT path FROM {TABLE_NAME} WHERE id = ?"
     cursor.execute(query_select, (video_db_id,))
     video_entry = cursor.fetchone()
@@ -1297,13 +1302,15 @@ def delete_main_recorded_video(video_db_id):
     
     file_removed_from_disk = False
     try:
+        # Attempt to delete the physical file
         if os.path.exists(absolute_file_path_on_disk):
             os.remove(absolute_file_path_on_disk)
             app.logger.info(f"Delete: File removed: {absolute_file_path_on_disk}")
             file_removed_from_disk = True
         else:
             app.logger.warning(f"Delete: File {absolute_file_path_on_disk} (DB ID: {video_db_id}) not on disk.")
-
+        
+        # Delete the database entry
         query_delete_db = f"DELETE FROM {TABLE_NAME} WHERE id = ?"
         cursor.execute(query_delete_db, (video_db_id,))
         db.commit()
@@ -1315,12 +1322,10 @@ def delete_main_recorded_video(video_db_id):
         return jsonify({"success": True, "message": msg}), 200
 
     except sqlite3.Error as e:
-        db.rollback()
+        db.rollback()  # Rollback DB changes on error
         app.logger.error(f"Delete: SQLite error for ID {video_db_id}: {e}")
         return jsonify({"success": False, "error": "Database error during deletion"}), 500
     except OSError as e:
-        # DB commit might have happened if os.remove failed after successful db delete query execution
-        # but before commit for it. Consider order of operations or more complex transaction.
         app.logger.error(f"Delete: OS error deleting file {absolute_file_path_on_disk}: {e}")
         return jsonify({"success": False, "error": f"Server error deleting file: {e.strerror}"}), 500
     except Exception as e:
@@ -1347,6 +1352,7 @@ def delete_main_incident_video(incident_db_id):
     absolute_file_path_on_disk = os.path.join(PROJECT_ROOT_DIR, relative_path_from_db)
     
     file_removed = False
+    # Attempt to delete the physical file
     try:
         if os.path.exists(absolute_file_path_on_disk):
             os.remove(absolute_file_path_on_disk)
@@ -1354,7 +1360,8 @@ def delete_main_incident_video(incident_db_id):
             file_removed = True
         else:
             app.logger.warning(f"Delete Incident: File {absolute_file_path_on_disk} (DB ID: {incident_db_id}) not on disk.")
-
+        
+        # Delete the database entry
         query_delete_db = f"DELETE FROM {INCIDENT_TABLE_NAME} WHERE id = ?"
         cursor.execute(query_delete_db, (incident_db_id,))
         db.commit()
@@ -1399,6 +1406,6 @@ atexit.register(release_all_cameras)
 
 if __name__ == "__main__":
     load_cameras_from_json()
-    host = '0.0.0.0'
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    host = '0.0.0.0' # Listen on all available network interfaces
+    app.run(debug=True, host='0.0.0.0', port=5001) # Port for the Flask development server
         
