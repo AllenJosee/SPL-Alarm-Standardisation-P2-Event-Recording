@@ -2,7 +2,7 @@ import pymcprotocol
 
 # Connect to the PLC
 plc = pymcprotocol.Type3E()
-plc.connect("169.254.111.50", 5007)  # Replace with your PLC's IP
+plc.connect("192.168.3.28", 5055)  # Replace with your PLC's IP
 
 while True:
     # Test writing a single value to D100

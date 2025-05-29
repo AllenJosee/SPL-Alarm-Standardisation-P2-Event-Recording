@@ -14,13 +14,20 @@ from functools import wraps
 import atexit
 from picamera2 import Picamera2, Preview
 import numpy as np
+import pymcprotocol
 
 
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
 settings_file = "src/settings.json"
 
-
+PLC_IP_ADDRESS = "192.168.3.28"  # Replace with your PLC's IP
+PLC_PORT = 5055
+PLC_READ_REGISTER = "D100"      # The register to read for triggers
+PLC_POLL_INTERVAL = 2           # Seconds between PLC reads (adjust as needed)
+PLC_START_RECORD_VALUE = 1
+PLC_STOP_RECORD_VALUE = 2
+PLC_INCIDENT_TRIGGER_VALUE = 3
 
 
 class Camera:
@@ -324,6 +331,104 @@ class Camera:
 app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
+
+plc_thread_stop_event = Thread.Event() # For cleanly stopping the PLC thread
+
+def plc_monitor_thread():
+    #Monitors a PLC register and triggers camera recording based on its value.
+    global cameras
+    plc = None
+    last_plc_value = None # To detect changes
+
+    print("PLC Monitor: Thread started.")
+
+    while not plc_thread_stop_event.is_set():
+        try:
+            if plc is None:
+                print(f"PLC Monitor: Attempting to connect to {PLC_IP_ADDRESS}:{PLC_PORT}...")
+                plc = pymcprotocol.Type3E()
+                # Set a timeout for connection and communication
+                plc.set_timeout(2) # 2 seconds timeout
+                plc.connect(PLC_IP_ADDRESS, PLC_PORT)
+                print("PLC Monitor: Connected to PLC successfully.")
+
+            # Read the PLC register
+            # batchread_wordunits returns a list, e.g., [value]
+            read_data = plc.batchread_wordunits(headdevice=PLC_READ_REGISTER, readsize=1)
+            current_plc_value = read_data[0] # Get the first (and only) element
+
+            if current_plc_value != last_plc_value: # Process only if value changed
+                print(f"PLC Monitor: Read {PLC_READ_REGISTER} Value: {current_plc_value} (Previous: {last_plc_value})")
+                last_plc_value = current_plc_value
+
+                # --- PLC Trigger Logic ---
+                # Iterate over all managed cameras
+                for camera_id, camera_obj in cameras.items():
+                    if not isinstance(camera_obj, Camera): 
+                        continue
+
+                    if current_plc_value == PLC_START_RECORD_VALUE:
+                        if not camera_obj.recording:
+                            print(f"PLC Monitor: Triggering START recording for camera {camera_id}")
+                            camera_obj.recording = True
+                            # Ensure camera is initialized before starting recording thread
+                            if camera_obj._get_or_init_capture(): # Initialize if not already
+                                Thread(target=camera_obj.record_video).start()
+                            else:
+                                print(f"PLC Monitor: ERROR - Could not initialize camera {camera_id} for PLC-triggered recording.")
+                                camera_obj.recording = False # Reset state if init failed
+                        else:
+                            print(f"PLC Monitor: Camera {camera_id} already recording, PLC start signal ({PLC_START_RECORD_VALUE}) ignored.")
+
+                    elif current_plc_value == PLC_STOP_RECORD_VALUE:
+                        if camera_obj.recording:
+                            print(f"PLC Monitor: Triggering STOP recording for camera {camera_id}")
+                            camera_obj.recording = False
+                            # The recording thread in camera_obj.record_video will see self.recording as False and stop.
+                        else:
+                            print(f"PLC Monitor: Camera {camera_id} not recording, PLC stop signal ({PLC_STOP_RECORD_VALUE}) ignored.")
+            else:
+                print(f"PLC Monitor: Value {PLC_READ_REGISTER} ({current_plc_value}) unchanged.")
+
+
+        except pymcprotocol.McProtocolError as e:
+            print(f"PLC Monitor: MC Protocol Error: {e}")
+            if plc:
+                plc.close()
+            plc = None # Force reconnection attempt
+            last_plc_value = None # Reset last value on error
+            time.sleep(PLC_POLL_INTERVAL * 2) # Longer delay on protocol error
+        except ConnectionRefusedError:
+            print(f"PLC Monitor: Connection refused. Check PLC IP/Port and if PLC is listening.")
+            if plc:
+                plc.close()
+            plc = None
+            last_plc_value = None
+            time.sleep(PLC_POLL_INTERVAL * 2) # Longer delay on connection error
+        except Exception as e:
+            print(f"PLC Monitor: An unexpected error occurred: {e}")
+            if plc: # Attempt to close if plc object exists
+                try:
+                    plc.close()
+                except: # Ignore errors during close on top of another error
+                    pass
+            plc = None # Reset plc to force reconnection
+            last_plc_value = None
+            # You might want a backoff strategy here for repeated errors
+            time.sleep(PLC_POLL_INTERVAL * 2) # Wait a bit longer before retrying on generic errors
+
+        # Wait for the defined interval before the next poll
+        plc_thread_stop_event.wait(PLC_POLL_INTERVAL)
+
+
+    # Clean up PLC connection when thread is stopping
+    if plc:
+        try:
+            plc.close()
+            print("PLC Monitor: Connection closed.")
+        except Exception as e:
+            print(f"PLC Monitor: Error closing PLC connection: {e}")
+    print("PLC Monitor: Thread finished.")
 
 def save_cameras_to_json():
         camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
@@ -806,10 +911,30 @@ def release_all_cameras():
     else:
         print("No camera objects found to release.")
 
+plc_monitor = None # Global variable for the thread object
+def stop_plc_monitor_thread():
+    global plc_monitor
+    if plc_monitor and plc_monitor.is_alive():
+        print("Attempting to stop PLC monitor thread...")
+        plc_thread_stop_event.set() # Signal the thread to stop
+        plc_monitor.join(timeout=PLC_POLL_INTERVAL + 5) # Wait for thread to finish
+        if plc_monitor.is_alive():
+            print("PLC monitor thread did not stop in time.")
+        else:
+            print("PLC monitor thread stopped successfully.")
+
 atexit.register(release_all_cameras)
+atexit.register(stop_plc_monitor_thread) # Register to stop on exit
+
 
 if __name__ == "__main__":
     load_cameras_from_json()
     host = '0.0.0.0'
+    if not cameras:
+        print("No cameras configured. PLC monitoring will not control any cameras.")
+    print("Starting PLC monitoring thread...")
+    plc_thread_stop_event.clear() # Ensure event is not set initially
+    plc_monitor = Thread(target=plc_monitor_thread, daemon=True) # daemon=True allows main program to exit even if thread is running
+    plc_monitor.start()
     app.run(debug=True, host='0.0.0.0', port=5001)
         

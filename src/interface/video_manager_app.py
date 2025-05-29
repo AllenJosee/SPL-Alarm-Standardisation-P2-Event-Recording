@@ -44,7 +44,7 @@ app.logger.setLevel(logging.INFO)
 
 
 def get_db():
-    db = getattr(g, '_database', None)
+    db = getattr(g, '_database', None) # Get the connection stored on g
     if db is None:
         db = g._database = sqlite3.connect(DATABASE_PATH)
         db.row_factory = sqlite3.Row # Access columns by name
@@ -85,7 +85,7 @@ def format_display_timestamp(iso_timestamp_str_utc): # Input is assumed to be UT
 
 @app.teardown_appcontext
 def close_connection(exception):
-    db = getattr(g, '_database', None)
+    db = getattr(g, '_database', None) # Get the connection stored on g
     if db is not None:
         db.close()
 
