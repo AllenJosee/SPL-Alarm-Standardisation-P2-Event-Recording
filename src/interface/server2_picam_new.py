@@ -12,26 +12,19 @@ import time
 import shutil
 from functools import wraps
 import atexit
-import pymcprotocol
 from picamera2 import Picamera2, Preview
 import numpy as np
+import pymcprotocol
+
+plc = pymcprotocol.Type3E()
+plc.connect("192.168.3.28", 5055)
+read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
+print(f"Read D100 Value: {read_value}")
 
 
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
 settings_file = "src/settings.json"
-
-PLC_IP = "169.254.111.50"  # Replace with your PLC's IP address
-PLC_PORT = 5007            # Replace with your PLC's port
-PLC_TARGET_REGISTER = "D100" # The PLC register to read (e.g., D100)
-PLC_READ_SIZE = 1
-PLC_POLLING_INTERVAL_SECONDS = 5 # How often to check the PLC (e.g., every 5 seconds)
-
-# IMPORTANT: This is the camera_id that the PLC will control.
-# Ensure a camera with this ID exists or can be added via the UI.
-# For example, if you add a camera and it gets ID "1", the PLC will control that one.
-PLC_CONTROLLED_CAMERA_ID = "1"
-
 
 
 class Camera:
@@ -335,7 +328,6 @@ class Camera:
 app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
-cameras = {}
 
 def save_cameras_to_json():
         camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
@@ -429,7 +421,11 @@ def index(camera_id):
     camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
     if camera is None:
         return "Camera not found", 404  # Handle the case where the camera ID is invalid
-
+    if read_value == 1:
+        print("PLC is ready for the next operation.")
+        camera.recording = True
+        Thread(target=camera.record_video).start()  
+        
     return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description)  # Pass camera_id to the template
 
 @app.route('/camera_list')
@@ -807,86 +803,6 @@ def delete_incident_video(camera_id, incident_folder, filename):
         return jsonify({"success": False, "error": "An unexpected server error occurred"}), 500
 
 
-def plc_check_and_control_camera():
-    """
-    Connects to the PLC, reads a register, and starts/stops recording
-    for a pre-configured camera based on the read value.
-    This function performs a single read operation per call.
-    """
-    global cameras 
-
-    camera_to_control = cameras.get(PLC_CONTROLLED_CAMERA_ID)
-    if not camera_to_control:
-        # This is not an error if the camera might be added later.
-        # print(f"[PLC] Info: Camera with ID '{PLC_CONTROLLED_CAMERA_ID}' not found for PLC control at this time.")
-        return
-
-    plc = None
-    try:
-        plc = pymcprotocol.Type3E()
-        # It's good practice to set timeouts for network operations
-        plc.set_timeout(connect_timeout=2.0) # Timeout for establishing connection (seconds)
-                                             # Read/write operations will also use this socket timeout.
-        
-        # print(f"[PLC] Attempting to connect to {PLC_IP}:{PLC_PORT}...")
-        plc.connect(PLC_IP, PLC_PORT)
-        # print(f"[PLC] Connected. Reading {PLC_TARGET_REGISTER}...")
-
-        read_values = plc.batchread_wordunits(headdevice=PLC_TARGET_REGISTER, readsize=PLC_READ_SIZE)
-        plc.close() # Close connection immediately after use for a one-shot read
-
-        if read_values:
-            plc_value = read_values[0]
-            # print(f"[PLC] Read {PLC_TARGET_REGISTER} Value: {plc_value}")
-
-            if plc_value == 1: # Trigger START recording
-                if not camera_to_control.recording:
-                    print(f"[PLC] PLC Value is 1. Starting recording for camera '{PLC_CONTROLLED_CAMERA_ID}'.")
-                    camera_to_control.recording = True
-                    thread = Thread(target=camera_to_control.record_video)
-                    thread.daemon = True 
-                    thread.start()
-                # else:
-                    # print(f"[PLC] PLC Value is 1, but camera '{PLC_CONTROLLED_CAMERA_ID}' is already recording.")
-            elif plc_value == 2: # Trigger STOP recording
-                if camera_to_control.recording:
-                    print(f"[PLC] PLC Value is 2. Stopping recording for camera '{PLC_CONTROLLED_CAMERA_ID}'.")
-                    camera_to_control.recording = False
-                # else:
-                    # print(f"[PLC] PLC Value is 2, but camera '{PLC_CONTROLLED_CAMERA_ID}' is not recording.")
-            # else: # Other values
-                # print(f"[PLC] PLC Value is {plc_value}. No action defined for this value.")
-        else:
-            print(f"[PLC] Error: No data read from {PLC_TARGET_REGISTER} (read_values is empty or None).")
-
-    except pymcprotocol.exceptions.PLCSocketError as e:
-        print(f"[PLC] Socket Error (e.g., connection refused, host unreachable): {e}")
-    except pymcprotocol.exceptions.PLCCommunicationError as e:
-        print(f"[PLC] Communication Error (e.g., timeout during read/write): {e}")
-    except pymcprotocol.exceptions.PLCResponseError as e: # Error reported by PLC (e.g. invalid address)
-        print(f"[PLC] PLC Response Error: {e}")
-    except Exception as e:
-        print(f"[PLC] An unexpected error occurred during PLC operation: {e}")
-    finally:
-        if plc and plc.is_connected: # Ensure plc object exists and is connected
-            try:
-                plc.close()
-            except Exception as e_close:
-                print(f"[PLC] Error closing PLC connection: {e_close}")
-
-
-def plc_monitor_loop():
-    """
-    Periodically calls plc_check_and_control_camera.
-    This function runs in a separate thread.
-    """
-    print(f"[PLC Monitor] Starting PLC monitoring thread. Polling interval: {PLC_POLLING_INTERVAL_SECONDS}s. Controlling Camera ID: '{PLC_CONTROLLED_CAMERA_ID}' via {PLC_TARGET_REGISTER}.")
-    while True: 
-        plc_check_and_control_camera() # This function performs a one-time PLC read
-        time.sleep(PLC_POLLING_INTERVAL_SECONDS)
-# --- End PLC Integration Functions ---
-
-
 def release_all_cameras():
     print("Releasing all camera captures on exit...")
     global cameras
@@ -901,19 +817,7 @@ def release_all_cameras():
 atexit.register(release_all_cameras)
 
 if __name__ == "__main__":
-    load_cameras_from_json() # Load existing camera configurations
-
-    # Start the PLC monitoring thread
-    # This thread will run in the background and periodically check the PLC
-    plc_monitoring_thread = Thread(target=plc_monitor_loop)
-    plc_monitoring_thread.daemon = True  # Daemonize thread: exits when main app exits
-    plc_monitoring_thread.start()
-
+    load_cameras_from_json()
     host = '0.0.0.0'
-    # When debug=True, Flask's reloader might start the plc_monitor_loop thread twice.
-    # This is usually fine for development but not for production.
-    # For production, use a proper WSGI server like Gunicorn or uWSGI.
-    use_reloader_flag = app.debug # Flask's debug mode implies reloader typically
-    print(f"Flask app starting. Debug mode: {app.debug}, Use reloader: {use_reloader_flag}")
-    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=True if app.debug else False)
+    app.run(debug=True, host='0.0.0.0', port=5001)
         
