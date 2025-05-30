@@ -16,10 +16,7 @@ from picamera2 import Picamera2, Preview
 import numpy as np
 import pymcprotocol
 
-plc = pymcprotocol.Type3E()
-plc.connect("192.168.3.28", 5055)
-read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
-print(f"Read D100 Value: {read_value}")
+
 
 
 recordings_dir = "src/recordings"
@@ -421,8 +418,13 @@ def index(camera_id):
     camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
     if camera is None:
         return "Camera not found", 404  # Handle the case where the camera ID is invalid
-    if read_value == 1:
-        print("PLC is ready for the next operation.")
+    plc = pymcprotocol.Type3E()
+    plc.connect("192.168.3.28", 5055)
+    read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
+    print(f"Read D100 Value: {read_value}")
+    if read_value == [1]:
+        print("Preparing to start recording")
+        time.sleep(3)
         camera.recording = True
         Thread(target=camera.record_video).start()  
         
