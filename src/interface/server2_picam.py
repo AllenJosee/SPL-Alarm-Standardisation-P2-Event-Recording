@@ -414,12 +414,9 @@ def plc_monitor_thread():
                     pass
             plc = None # Reset plc to force reconnection
             last_plc_value = None
-            # You might want a backoff strategy here for repeated errors
             time.sleep(PLC_POLL_INTERVAL * 2) # Wait a bit longer before retrying on generic errors
 
-        # Wait for the defined interval before the next poll
         plc_thread_stop_event.wait(PLC_POLL_INTERVAL)
-
 
     # Clean up PLC connection when thread is stopping
     if plc:
