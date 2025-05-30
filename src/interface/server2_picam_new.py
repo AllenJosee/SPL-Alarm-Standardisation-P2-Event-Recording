@@ -17,8 +17,6 @@ import numpy as np
 import pymcprotocol
 
 
-
-
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
 settings_file = "src/settings.json"
@@ -40,26 +38,6 @@ class Camera:
         os.makedirs(incidents_dir, exist_ok=True)
         self.load_settings()
 
-    '''
-    def _get_or_init_capture(self):
-        """Initializes and returns the cv2.VideoCapture object if not already done."""
-        if self.camera is None:
-            try:
-                print(f"Initializing cv2.VideoCapture for camera {self.camera_id} (device: {self.device_index})...")
-                self.camera = cv2.VideoCapture(self.device_index)
-                
-                #self.camera = picamera2(self.device_index)
-                
-                if not self.camera.isOpened():
-                    print(f"Error: Could not open video device {self.device_index} for camera {self.camera_id}")
-                    self.camera = None # Reset if opening failed
-                else:
-                     print(f"Successfully opened camera {self.camera_id}")
-            except Exception as e:
-                print(f"Exception initializing cv2.VideoCapture for camera {self.camera_id}: {e}")
-                self.camera = None
-        return self.camera
-        '''
     def _get_or_init_capture(self):
         """Initializes and returns the Picamera2 object if not already done."""
         if self.camera is None:
@@ -421,14 +399,26 @@ def index(camera_id):
     plc = pymcprotocol.Type3E()
     plc.connect("192.168.3.28", 5055)
     read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
-    print(f"Read D100 Value: {read_value}")
-    if read_value == [1]:
-        print("Preparing to start recording")
-        time.sleep(3)
-        camera.recording = True
-        Thread(target=camera.record_video).start()  
-        
-    return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description)  # Pass camera_id to the template
+    
+    while True:
+        try:
+            read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
+            print(f"Read D100 Value: {read_value}")
+            if read_value == [1]:
+                print("Preparing to start recording")
+                time.sleep(3)
+                camera.recording = True
+                Thread(target=camera.record_video).start()  
+            elif read_value == [2]:
+                print("Preparing to start recording")
+                time.sleep(3)
+                camera.recording = False
+            time.sleep(1)  # Wait for a second before the next read
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+        return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description)  # Pass camera_id to the template
 
 @app.route('/camera_list')
 @login_required
