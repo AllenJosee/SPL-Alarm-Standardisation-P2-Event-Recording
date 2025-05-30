@@ -7,29 +7,31 @@ from flask import Flask, render_template, Response, request, redirect, url_for, 
 import os
 import cv2
 import json
-from threading import Thread, Event # Import Event
+from threading import Thread
 import time
 import shutil
 from functools import wraps
 import atexit
+import pymcprotocol
 from picamera2 import Picamera2, Preview
 import numpy as np
-import pymcprotocol # <-- ADDED IMPORT
 
 
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"
 settings_file = "src/settings.json"
 
-# --- PLC Configuration ---
-PLC_IP_ADDRESS = "192.168.3.28"  # Replace with your PLC's IP
-PLC_PORT = 5055
-PLC_READ_REGISTER = "D100"      # The register to read for triggers
-PLC_POLL_INTERVAL = 2           # Seconds between PLC reads (adjust as needed)
-PLC_START_RECORD_VALUE = 1
-PLC_STOP_RECORD_VALUE = 2
-PLC_INCIDENT_TRIGGER_VALUE = 3 # Added for completeness, implement logic if needed
-# --- End PLC Configuration ---
+PLC_IP = "169.254.111.50"  # Replace with your PLC's IP address
+PLC_PORT = 5007            # Replace with your PLC's port
+PLC_TARGET_REGISTER = "D100" # The PLC register to read (e.g., D100)
+PLC_READ_SIZE = 1
+PLC_POLLING_INTERVAL_SECONDS = 5 # How often to check the PLC (e.g., every 5 seconds)
+
+# IMPORTANT: This is the camera_id that the PLC will control.
+# Ensure a camera with this ID exists or can be added via the UI.
+# For example, if you add a camera and it gets ID "1", the PLC will control that one.
+PLC_CONTROLLED_CAMERA_ID = "1"
+
 
 
 class Camera:
@@ -131,7 +133,6 @@ class Camera:
         try:
             all_items_in_dir = os.listdir(folder)
         except Exception as e:
-            print(f"  [load_videos_from_folder Camera {self.camera_id}] ERROR loading directory: {e}") # Added error detail
             return [] 
 
         for file in all_items_in_dir:
@@ -149,10 +150,10 @@ class Camera:
                     print(f"      [load_videos_from_folder] ERROR: FileNotFoundError getting timestamp for {filepath}. Skipping.")
                 except Exception as e:
                     print(f"      [load_videos_from_folder] ERROR: Exception getting timestamp/appending for {filepath}: {e}. Skipping.")
-            # else: # Removed potentially verbose else
-            #      print(f"      [load_videos_from_folder] Item is NOT an .mp4 file. Skipping.")
+            else:
+                 print(f"      [load_videos_from_folder] Item is NOT an .mp4 file. Skipping.")
 
-        # print(f"  [load_videos_from_folder Camera {self.camera_id}] Finished processing. Returning list with {len(videos)} videos.") # Can be verbose
+        print(f"  [load_videos_from_folder Camera {self.camera_id}] Finished processing. Returning list with {len(videos)} videos.")
         return videos
 
 
@@ -188,103 +189,94 @@ class Camera:
         self.settings["video_duration"] = video_duration
         with open(self.settings_file, "w") as f:
             json.dump(self.settings, f)
-        return True # Indicate success
-
 
     def record_video(self):
-        capture = self._get_or_init_capture()
+        capture = self._get_or_init_capture()  # Get/init camera first
         if not capture:
             print(f"Cannot start recording for camera {self.camera_id}: Capture device not available.")
-            self.recording = False
-            return
+            self.recording = False  # Ensure recording stops if init failed
+            return  # Exit if camera couldn't be opened
 
-        print(f"Camera {self.camera_id}: record_video thread started. Recording status: {self.recording}")
-
-        while self.recording: # Outer loop for continuous recording segments
-            if not self.recording: # Double check before starting a new segment
-                break
-
+        while self.recording:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             filename = f"cam{self.camera_id}_{timestamp}.mp4"
             filepath = os.path.join(self.recordings_dir, filename)
-            print(f"Camera {self.camera_id}: Attempting to record to {filepath}")
-
-            out = None # Initialize out here
+            print(f"Attempting to record to {filepath}")  # Debugging line
             try:
-                frame = self.camera.capture_array()
+                # Read one frame to get frame size for VideoWriter
+                frame = self.camera.capture_array()  # Capture a frame
                 if frame is None:
-                    print(f"Error: Failed to capture initial frame from camera {self.camera_id}.")
-                    # self.recording = False # Decide if this error should stop all recording attempts
-                    time.sleep(1) # Wait before retrying
-                    continue # Try to capture frame again in the next iteration of outer while
+                    print(f"Error: Failed to capture frame from camera {self.camera_id}.")
+                    self.recording = False
+                    break
 
                 height, width = frame.shape[:2]
-                fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                fps = 15 # Adjust as needed
+
+                # Define the codec and create VideoWriter object
+                fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for mp4
+                fps = 15  # Adjust as needed
                 out = cv2.VideoWriter(filepath, fourcc, fps, (width, height))
 
                 start_time = time.time()
-                video_duration = self.settings.get("video_duration", 5)
-                print(f"Camera {self.camera_id}: Recording segment started. Duration: {video_duration}s.")
+                print(f"Recording started. Capturing frames at {fps} FPS for {self.settings.get('video_duration', 5)} seconds.")
 
-                # Inner loop for the duration of one video segment
-                while self.recording and (time.time() - start_time) < video_duration:
-                    current_frame = self.camera.capture_array()
-                    if current_frame is None:
-                        print(f"Warning: Could not read frame from camera {self.camera_id} during segment.")
-                        time.sleep(0.1 / fps if fps > 0 else 0.01) # Sleep appropriately
+                while self.recording and (time.time() - start_time) < self.settings.get("video_duration", 5):
+                    frame = self.camera.capture_array()  # Capture frame (RGB)
+                    if frame is None:
+                        print(f"Warning: Could not read frame from camera {self.camera_id} during recording.")
+                        time.sleep(0.1)
                         continue
-                    
-                    frame_bgr = cv2.cvtColor(current_frame, cv2.COLOR_RGB2BGR)
-                    out.write(frame_bgr)
-                    # time.sleep(1/fps) # Optional: control frame rate more explicitly if capture_array is too fast
 
-                if out: # Ensure out was initialized
-                    out.release()
-                    print(f"Camera {self.camera_id}: Finished recording segment to {filepath}")
+                    # Convert RGB frame to BGR for OpenCV processing
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    out.write(frame_bgr)  # Write the frame to the video file
+
+                out.release()  # Release the VideoWriter
+                print(f"Camera {self.camera_id}: Finished recording to {filepath}")
 
             except Exception as e:
-                print(f"Error during recording segment for {filepath}: {e}")
-                if out: # Ensure out is released on error too
-                    out.release()
-                # self.recording = False # Decide if any error should stop all PLC-triggered recording
-                time.sleep(1) # Wait a bit before trying a new segment if still self.recording
-                continue # Continue to next iteration of outer while loop
-
-            if not self.recording: # Check again if we were told to stop during the segment
-                break
-
-            # Pruning logic (moved to be after each segment)
-            try:
-                max_videos = self.settings.get("max_videos", 5)
-                videos_with_ts = []
-                if os.path.isdir(self.recordings_dir):
-                    for f_name in os.listdir(self.recordings_dir):
-                        if f_name.endswith(".mp4"):
-                            f_path = os.path.join(self.recordings_dir, f_name)
-                            try:
-                                ts = os.path.getctime(f_path)
-                                videos_with_ts.append({'path': f_path, 'timestamp': ts, 'filename': f_name})
-                            except Exception as e_ts:
-                                print(f"[Pruning Warning Camera {self.camera_id}] Error getting timestamp for {f_path}: {e_ts}")
-                else:
-                    print(f"[Pruning Warning Camera {self.camera_id}] Recordings directory not found: {self.recordings_dir}")
-
-                if len(videos_with_ts) > max_videos:
-                    videos_with_ts.sort(key=lambda x: x['timestamp'])
-                    num_to_delete = len(videos_with_ts) - max_videos
-                    print(f"[Pruning Camera {self.camera_id}] Need to delete {num_to_delete} oldest video(s).")
-                    for i in range(num_to_delete):
-                        video_to_remove = videos_with_ts[i]
-                        try:
-                            os.remove(video_to_remove['path'])
-                            print(f"[Pruning Camera {self.camera_id}] Removed oldest video: {video_to_remove['filename']}")
-                        except OSError as e_rm:
-                            print(f"[Pruning Error Camera {self.camera_id}] Failed to remove {video_to_remove['path']}: {e_rm}")
-            except Exception as e_prune:
-                print(f"[Pruning Error Camera {self.camera_id}] An unexpected error occurred during pruning: {e_prune}")
+                print(f"Error during recording for {filepath}: {e}")
+                self.recording = False  # Stop recording on error
         
-        print(f"Camera {self.camera_id}: record_video thread finished. Recording status: {self.recording}")
+            try:
+                    max_videos = self.settings.get("max_videos", 5)
+                    videos_with_ts = []
+                    if os.path.isdir(self.recordings_dir): # Check if directory exists first
+                        for f in os.listdir(self.recordings_dir):
+                            if f.endswith(".mp4"):
+                                filepath = os.path.join(self.recordings_dir, f)
+                                try:
+                                    ts = os.path.getctime(filepath)
+                                    videos_with_ts.append({'path': filepath, 'timestamp': ts, 'filename': f})
+                                except FileNotFoundError:
+                                    print(f"[Pruning Warning Camera {self.camera_id}] File not found while getting timestamp: {filepath}")
+                                except Exception as e:
+                                     print(f"[Pruning Warning Camera {self.camera_id}] Error getting timestamp for {filepath}: {e}")
+                    else:
+                        print(f"[Pruning Warning Camera {self.camera_id}] Recordings directory not found: {self.recordings_dir}")
+
+                    num_videos = len(videos_with_ts)
+                    print(f"[Pruning Check Camera {self.camera_id}] Found {num_videos} videos. Max allowed: {max_videos}")
+
+                    if num_videos > max_videos:
+                        num_to_delete = num_videos - max_videos
+                        print(f"[Pruning Camera {self.camera_id}] Need to delete {num_to_delete} oldest video(s).")
+                        videos_with_ts.sort(key=lambda x: x['timestamp'])
+
+                        for i in range(num_to_delete):
+                            if i < len(videos_with_ts): 
+                                video_to_remove = videos_with_ts[i] 
+                                try:
+                                    os.remove(video_to_remove['path'])
+                                    print(f"[Pruning Camera {self.camera_id}] Removed oldest video: {video_to_remove['filename']}")
+                                except OSError as e:
+                                    print(f"[Pruning Error Camera {self.camera_id}] Failed to remove {video_to_remove['path']}: {e}")
+                            else:
+                                print(f"[Pruning Warning Camera {self.camera_id}] Index {i} out of bounds during deletion loop.")
+                                break 
+
+            except Exception as e:
+                print(f"[Pruning Error Camera {self.camera_id}] An unexpected error occurred during pruning setup/execution: {e}")
     
 
     def simulate_incident(self):
@@ -292,15 +284,9 @@ class Camera:
         incident_folder_name = f"cam{self.camera_id}_incident_{incident_timestamp}"
         incident_folder_path = os.path.join(self.incidents_dir, incident_folder_name)        
         os.makedirs(incident_folder_path, exist_ok=True)
-        
-        # Ensure recordings_dir exists before trying to load videos from it
-        if not os.path.isdir(self.recordings_dir):
-            print(f"Warning: Recordings directory {self.recordings_dir} not found for incident simulation on camera {self.camera_id}.")
-            return
-
-        for video in reversed(self.load_videos_from_folder(self.recordings_dir)): # Make sure this folder path is correct
+        for video in reversed(self.load_videos_from_folder(self.recordings_dir)):
             try:
-                source_path = os.path.join(self.recordings_dir, video["filename"]) # And this one
+                source_path = os.path.join(self.recordings_dir, video["filename"])
                 destination_path = os.path.join(incident_folder_path, video["filename"])
                 shutil.copy(source_path, destination_path)
                 if len(os.listdir(incident_folder_path)) >= 6: # Check number of files copied
@@ -312,218 +298,99 @@ class Camera:
 
     #Video Feed
     def generate_video_feed(self):
-        capture = self._get_or_init_capture()
+        capture = self._get_or_init_capture()  # Get/init camera first
         if not capture:
             print(f"Cannot generate feed for camera {self.camera_id}: Capture device not available.")
-            # Yield a placeholder or error image
-            # For now, just return to avoid an unhandled generator
-            return 
-
+            return
         while True:
-            if self.camera is None: # Check if camera was released (e.g. during logout)
+            if self.camera is None:
                 print(f"Error: Camera {self.camera_id} capture lost during feed generation.")
-                break 
-            try:
-                frame = self.camera.capture_array()
-                if frame is None:
-                    print(f"Warning: Could not read frame from camera {self.camera_id} for feed.")
-                    time.sleep(0.1)
-                    continue
+                break  # Exit the loop if camera fails
 
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            frame = self.camera.capture_array()  # Capture frame (RGB)
+            if frame is None:
+                print(f"Warning: Could not read frame from camera {self.camera_id} for feed.")
+                time.sleep(0.1)  # Avoid busy-looping
+                continue  # Try reading next frame
 
-                if self.recording:
-                    cv2.rectangle(
-                        frame_bgr,
-                        (0, 0),
-                        (frame_bgr.shape[1] - 1, frame_bgr.shape[0] - 1),
-                        (0, 0, 255), # Red border
-                        10, # Thickness
-                    )
-                
-                ret, buffer = cv2.imencode(".jpg", frame_bgr)
-                if not ret:
-                    print(f"Warning: JPEG encoding failed for camera {self.camera_id}")
-                    time.sleep(0.1)
-                    continue
-                frame_bytes = buffer.tobytes()
-                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-                time.sleep(0.03) # ~30 FPS, adjust as needed to reduce CPU if not necessary
+            # Convert RGB frame to BGR for OpenCV processing
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-            except Exception as e:
-                print(f"Error in generate_video_feed for camera {self.camera_id}: {e}")
-                # Consider how to handle this - break, try to reinit, or yield error frame
-                break # Exit loop on error for now
+            if self.recording:
+                frame_bgr = cv2.rectangle(
+                    frame_bgr,
+                    (0, 0),
+                    (frame_bgr.shape[1] - 1, frame_bgr.shape[0] - 1),
+                    (0, 0, 255),
+                    10,
+                )
+            # Encode frame for streaming
+            _, buffer = cv2.imencode(".jpg", frame_bgr)
+            frame_bytes = buffer.tobytes()
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+
 
 
 # Initialize Flask app
 app = Flask(__name__, template_folder='static/templates')
-app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5' # CHANGE THIS FOR PRODUCTION
-cameras = {} # Initialize cameras dictionary
+app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'
 
-# --- PLC Monitoring Globals ---
-plc_thread_stop_event = Event()
-plc_monitor_thread_obj = None # To store the thread object
-
-def plc_monitor_thread_function(): # Renamed to avoid conflict if you name the thread itself 'plc_monitor_thread'
-    global cameras
-    plc = None
-    last_plc_value = None 
-
-    print("PLC Monitor: Thread started.")
-
-    while not plc_thread_stop_event.is_set():
-        try:
-            if plc is None:
-                print(f"PLC Monitor: Attempting to connect to {PLC_IP_ADDRESS}:{PLC_PORT}...")
-                plc = pymcprotocol.Type3E()
-                plc.set_timeout(2.5) # Slightly longer timeout
-                plc.connect(PLC_IP_ADDRESS, PLC_PORT)
-                print("PLC Monitor: Connected to PLC successfully.")
-                last_plc_value = None # Reset last value on successful connect
-
-            read_data = plc.batchread_wordunits(headdevice=PLC_READ_REGISTER, readsize=1)
-            current_plc_value = read_data[0]
-
-            if current_plc_value != last_plc_value:
-                print(f"PLC Monitor: Read {PLC_READ_REGISTER} Value: {current_plc_value} (Previous: {last_plc_value})")
-                
-                for camera_id, camera_obj in list(cameras.items()): # Use list(cameras.items()) for safe iteration if cameras can be modified
-                    if not isinstance(camera_obj, Camera):
-                        continue
-
-                    if current_plc_value == PLC_START_RECORD_VALUE:
-                        if not camera_obj.recording:
-                            print(f"PLC Monitor: Triggering START recording for camera {camera_id}")
-                            if camera_obj._get_or_init_capture():
-                                camera_obj.recording = True # Set recording true only if camera init succeeds
-                                Thread(target=camera_obj.record_video, daemon=True).start()
-                            else:
-                                print(f"PLC Monitor: ERROR - Could not initialize camera {camera_id} for PLC-triggered recording.")
-                        else:
-                            print(f"PLC Monitor: Camera {camera_id} already recording, PLC start signal ({PLC_START_RECORD_VALUE}) ignored.")
-                    
-                    elif current_plc_value == PLC_STOP_RECORD_VALUE:
-                        if camera_obj.recording:
-                            print(f"PLC Monitor: Triggering STOP recording for camera {camera_id}")
-                            camera_obj.recording = False
-                        else:
-                            print(f"PLC Monitor: Camera {camera_id} not recording, PLC stop signal ({PLC_STOP_RECORD_VALUE}) ignored.")
-                    
-                    elif current_plc_value == PLC_INCIDENT_TRIGGER_VALUE:
-                        print(f"PLC Monitor: Triggering SIMULATE INCIDENT for camera {camera_id}")
-                        # Ensure camera is initialized before simulating incident if it uses the camera stream
-                        if camera_obj._get_or_init_capture():
-                             Thread(target=camera_obj.simulate_incident, daemon=True).start() # Run in thread if it's long
-                        else:
-                            print(f"PLC Monitor: ERROR - Could not initialize camera {camera_id} for PLC-triggered incident.")
-                
-                last_plc_value = current_plc_value # Update last_plc_value only after processing all cameras for this change
-            # else:
-                # print(f"PLC Monitor: Value {PLC_READ_REGISTER} ({current_plc_value}) unchanged.") # Can be very verbose
-
-        except pymcprotocol.McTimeoutError:
-            print(f"PLC Monitor: Timeout communicating with PLC. Retrying...")
-            if plc:
-                try: plc.close()
-                except: pass
-            plc = None
-            # last_plc_value remains to avoid re-triggering if connection restores with same value
-            # Wait longer on timeout
-            plc_thread_stop_event.wait(PLC_POLL_INTERVAL * 3) # Use wait for interruptible sleep
-            continue # Skip the standard poll interval wait at the end
-
-        except (pymcprotocol.McProtocolError, ConnectionRefusedError, OSError) as e: # Catch more specific network errors
-            print(f"PLC Monitor: Communication Error ({type(e).__name__}): {e}")
-            if plc:
-                try: plc.close()
-                except: pass
-            plc = None
-            last_plc_value = None # Reset on other errors to ensure re-evaluation
-            plc_thread_stop_event.wait(PLC_POLL_INTERVAL * 2)
-            continue
-        except Exception as e:
-            print(f"PLC Monitor: An unexpected error occurred: {e}")
-            if plc:
-                try: plc.close()
-                except: pass
-            plc = None
-            last_plc_value = None
-            plc_thread_stop_event.wait(PLC_POLL_INTERVAL * 2)
-            continue
-        
-        plc_thread_stop_event.wait(PLC_POLL_INTERVAL)
-
-    if plc:
-        try:
-            plc.close()
-            print("PLC Monitor: Connection closed.")
-        except Exception as e:
-            print(f"PLC Monitor: Error closing PLC connection: {e}")
-    print("PLC Monitor: Thread finished.")
-
+cameras = {}
 
 def save_cameras_to_json():
         camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
-        # print("Saving cameras to JSON:", camera_data)
-        try:
-            with open('cameras.json', 'w') as f:
-                json.dump(camera_data, f, indent=4) # Added indent for readability
-            print("Cameras saved successfully.")
-        except Exception as e:
-            print(f"Error saving cameras to JSON: {e}")
+        print("Saving cameras to JSON:", camera_data)  # Debugging line
+        with open('cameras.json', 'w') as f:
+            json.dump(camera_data, f)
+        print("Cameras saved successfully.")
     
 def load_cameras_from_json():
     global cameras
-    cameras = {} 
+    cameras = {} # Start fresh
     filepath = 'cameras.json'
     if os.path.exists(filepath):
         try:
             with open(filepath, 'r') as f:
                 loaded_data = json.load(f)
                 for cam_id_key, camera_config_data in loaded_data.items():
+                    # Ensure the config data itself contains the matching camera_id for from_dict
                     if 'camera_id' not in camera_config_data:
                          print(f"Warning: 'camera_id' key missing in config for {cam_id_key}. Using dictionary key as ID.")
-                         camera_config_data['camera_id'] = cam_id_key
+                         camera_config_data['camera_id'] = cam_id_key # Add it for consistency
 
+                    # Create Camera object using the config dictionary
                     try:
                          cameras[cam_id_key] = Camera.from_dict(camera_config_data)
                     except Exception as e:
                          print(f"Error creating Camera object for ID {cam_id_key} from loaded data: {e}")
-            print(f"Loaded {len(cameras)} cameras from JSON.")
+
         except json.JSONDecodeError:
             print(f"Error decoding JSON from {filepath}. Starting with empty camera list.")
         except Exception as e:
             print(f"Error loading cameras from {filepath}: {e}. Starting with empty camera list.")
-    else:
-        print(f"Cameras file {filepath} not found. Starting with empty camera list.")
 
 
-load_cameras_from_json() # Load cameras at startup
+load_cameras_from_json()
 
 #Load users
 def validate_user(username, password):
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    users_path = os.path.join(current_dir, 'users.json') # Ensure users.json is in the same dir as this script
+    users_path = os.path.join(current_dir, 'users.json')
     try:
         if not os.path.exists(users_path):
-            # Create a default users.json if it doesn't exist
-            default_users = {"users": [{"username": "admin", "password": "password"}]} # CHANGE DEFAULT CREDENTIALS
-            with open(users_path, 'w') as f_users:
-                json.dump(default_users, f_users, indent=4)
-            print(f"Created default users.json with admin/password. PLEASE CHANGE THE PASSWORD.")
-
+            raise FileNotFoundError(f"users.json not found at {users_path}")
         with open(users_path) as f:
             data = json.load(f)
+            print("DEBUG - Loaded data:", data)  # Debugging line
             
-        users_list = data.get('users', [])
+        users = data.get('users', [])
         return any(
             user.get('username') == username.strip() and 
-            user.get('password') == password.strip() # In a real app, hash passwords!
-            for user in users_list
+            user.get('password') == password.strip()
+            for user in users
         )
     except Exception as e:
-        print(f"Auth Error reading/validating users.json: {str(e)}")
+        print(f"Auth Error: {str(e)}")
         return False
 
 
@@ -532,8 +399,7 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('authenticated'):
-            flash("You need to be logged in to access this page.", "warning")
-            return redirect(url_for('login', next=request.url))
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -545,75 +411,76 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if session.get('authenticated'):
-        return redirect(url_for('camera_list'))
-        
     error = None
     if request.method == 'POST':
         username = request.form['username'].strip()
-        password = request.form['password'].strip() # DO NOT store/compare plain text passwords in production
+        password = request.form['password'].strip()
         
         if validate_user(username, password):
             session['authenticated'] = True
             session['username'] = username
-            flash('Login successful!', 'success')
-            next_url = request.args.get('next')
-            return redirect(next_url or url_for('camera_list'))
+            return redirect(url_for('camera_list'))
         error = 'Invalid credentials. Please try again.'
-        flash(error, 'danger') # Use flash for errors too
-    return render_template('login.html', error_message_from_server=error) # Pass error explicitly if needed by template
+    return render_template('login.html', error = error)
 
 @app.route('/index/<camera_id>')
 @login_required
 def index(camera_id):
-    camera = cameras.get(camera_id)
+    camera = cameras.get(camera_id)  # Get the camera instance from the dictionary
     if camera is None:
-        flash(f"Camera {camera_id} not found.", "danger")
-        return redirect(url_for('camera_list'))
+        return "Camera not found", 404  # Handle the case where the camera ID is invalid
 
-    return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description, camera_obj=camera)
+    return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description)  # Pass camera_id to the template
 
 @app.route('/camera_list')
 @login_required
 def camera_list():
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
     return render_template('camera_list.html', username=session['username'], cameras = cameras)
 
 #Add new camera
 @app.route('/add_camera', methods=['GET', 'POST'])
 @login_required
 def add_camera():
+    error = None
     if request.method == 'POST':
         description = request.form.get('description', '').strip()
-        if not description:
-            flash("Camera description cannot be empty.", "danger")
-            return render_template('add_camera.html')
-
+        
         next_id_int = 1
         if cameras: 
-            numeric_ids = [int(key) for key in cameras.keys() if key.isdigit()]
+            numeric_ids = []
+            for key in cameras.keys():
+                try: 
+                    numeric_ids.append(int(key))
+                except ValueError:
+                    print(f"Warning: Non-integer camera key found and ignored: {key}")
+                    pass
             if numeric_ids:
                 next_id_int = max(numeric_ids) + 1
-        
-        new_camera_id_str = str(next_id_int)
-        
-        try:
-            new_camera = Camera(
-                camera_id=new_camera_id_str,
-                recordings_dir=os.path.join(recordings_dir, f"camera{new_camera_id_str}"),
-                incidents_dir=os.path.join(incidents_dir, f"camera{new_camera_id_str}"),
-                settings_file=os.path.join("src", f"settings_camera{new_camera_id_str}.json"), # Ensure src exists
-                description=description
-            )
-            cameras[new_camera_id_str] = new_camera
-            save_cameras_to_json()
-            flash(f"Camera '{description}' (ID: {new_camera_id_str}) added successfully.", "success")
-            return redirect(url_for('camera_list'))
-        except Exception as e: 
-            print(f"Error creating camera {new_camera_id_str}: {e}")
-            flash(f"An unexpected error occurred while adding the camera: {str(e)}", "danger")
-            return render_template('add_camera.html', description=description) # Retain form data
 
-    return render_template('add_camera.html')
+        new_camera_id_str = str(next_id_int)  # Convert to string for the camera ID
+        
+        if error is None:
+            try:
+                # Use the validated string ID as the key
+                camera_id_key = new_camera_id_str
+                new_camera = Camera(
+                    camera_id=camera_id_key, # Pass the ID here
+                    recordings_dir=f"src/recordings/camera{camera_id_key}",
+                    incidents_dir=f"src/incidents/camera{camera_id_key}",
+                    settings_file=f"src/settings_camera{camera_id_key}.json",
+                    description=description
+                )
+                cameras[camera_id_key] = new_camera
+                save_cameras_to_json()  # Save the updated cameras to JSON
+                return redirect(url_for('camera_list'))
+            except Exception as e: 
+                print(f"Error creating camera {camera_id_key}: {e}")
+                error = "An unexpected error occurred while adding the camera."
+                return render_template('add_camera.html', error=error)
+
+    return render_template('add_camera.html', error =error)
 
 #Delete camera
 @app.route('/delete_camera/<camera_id>', methods=['POST'])
@@ -621,63 +488,61 @@ def add_camera():
 def delete_camera(camera_id):
     if camera_id in cameras:
         camera_to_delete = cameras[camera_id]
-        
-        if camera_to_delete.recording: # Stop recording if active
-            camera_to_delete.recording = False
-            time.sleep(0.5) # Give recording thread a moment to stop
-
         camera_to_delete.release_capture()
 
-        paths_to_delete = [
-            camera_to_delete.recordings_dir,
-            camera_to_delete.incidents_dir,
-            camera_to_delete.settings_file
-        ]
-        
+        recordings_path = camera_to_delete.recordings_dir
+        incidents_path = camera_to_delete.incidents_dir
+        settings_path = camera_to_delete.settings_file
         try: 
             del cameras[camera_id]
             save_cameras_to_json()
+            if recordings_path and os.path.exists(recordings_path):
+                shutil.rmtree(recordings_path)
+                print(f"Successfully deleted directory: {recordings_path}")
+                print(f"Directory not found or path invalid, skipping deletion: {recordings_path}")
 
-            for path_item in paths_to_delete:
-                if path_item and os.path.exists(path_item):
-                    if os.path.isdir(path_item):
-                        shutil.rmtree(path_item)
-                        print(f"Successfully deleted directory: {path_item}")
-                    elif os.path.isfile(path_item):
-                        os.remove(path_item)
-                        print(f"Successfully deleted file: {path_item}")
-                else:
-                    print(f"Path not found or invalid, skipping deletion: {path_item}")
-            
-            flash(f"Camera ID {camera_id} and its data deleted successfully.", "success")
+            if incidents_path and os.path.exists(incidents_path):
+                shutil.rmtree(incidents_path)
+                print(f"Successfully deleted directory: {incidents_path}")
+            else:
+                print(f"Directory not found or path invalid, skipping deletion: {incidents_path}")
+
+            if settings_path and os.path.exists(settings_path):
+                os.remove(settings_path)
+                print(f"Successfully deleted file: {settings_path}")
+            else:
+                print(f"Settings file not found or path invalid, skipping deletion: {settings_path}")
+
             return redirect(url_for('camera_list'))
         except OSError as e:
             print(f"Error deleting files/folders for camera {camera_id}: {e}")
-            flash(f"Error deleting files/folders for camera {camera_id}: {str(e)}", "danger")
             return redirect(url_for('camera_list'))
         
-    flash(f"Camera {camera_id} not found for deletion.", "warning")
-    return redirect(url_for('camera_list'))
+    return "Camera not found", 404  
 
 
-@app.route('/feed_view') # Consider if this page needs to show feeds for ALL cameras or a selection
+@app.route('/feed_view')
 @login_required
 def feed_view():
-    # This template would need to be designed to dynamically load feeds for all cameras.
-    # For simplicity, it might be better to have this link to individual camera /index pages.
-    return render_template('feed_view.html', username=session['username'], cameras=cameras)
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    return render_template('feed_view.html', username=session['username'])
 
-@app.route('/logout', methods=['POST', 'GET']) # Allow GET for easy logout link
-@login_required # Ensure user is logged in to log out
+@app.route('/logout', methods=['POST'])
 def logout():
-    # Camera release is handled by atexit, but good to stop active recordings explicitly
-    for camera_id, camera_obj in cameras.items():
-        if camera_obj.recording:
-            camera_obj.recording = False
-            print(f"Stopped recording for camera {camera_id} during logout.")
+    global cameras
+    if cameras: # Check if the global dictionary exists and is populated
+        for camera_id, camera in cameras.items():
+            if isinstance(camera, Camera):
+                try:
+                    camera.release_capture()
+                except Exception as e:
+                    print(f"Error releasing camera {camera_id} during logout: {e}")
+        print("Finished attempting camera releases for logout.")
+    else:
+        print("No 'cameras' dictionary found or it's empty during logout.")
     
     session.clear()
-    flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
 
@@ -687,260 +552,368 @@ def logout():
 def videos(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
-        flash(f"Camera {camera_id} not found.", "danger")
-        return redirect(url_for('camera_list'))
-        
+        return "Camera not found", 404
+    print(f"\n[DEBUG /videos/{camera_id}] Loading videos from: {camera.recordings_dir}")
     videos_list = camera.load_videos_from_folder(camera.recordings_dir)
-    sorted_videos = sorted(videos_list, key=lambda v: v.get('raw_timestamp', 0), reverse=True)
-    return render_template("videos.html", videos=sorted_videos, camera_id=camera_id, username=session['username'], description=camera.description, camera_obj=camera)
+    print(f"[DEBUG /videos/{camera_id}] BEFORE SORT ({len(videos_list)} items):")
+    for v in videos_list:
+        print(f"  - {v.get('filename')}: {v.get('raw_timestamp')}")
 
+    sorted_videos = sorted(videos_list, key=lambda v: v.get('raw_timestamp', 0), reverse=True)
+
+    print(f"[DEBUG /videos/{camera_id}] AFTER SORT ({len(sorted_videos)} items):")
+    for v in sorted_videos:
+        print(f"  - {v.get('filename')}: {v.get('raw_timestamp')}")
+    print("-" * 20)
+
+    return render_template("videos.html", videos=sorted_videos, camera_id=camera_id, username=session['username'], description=camera.description )
 @app.route('/incident_videos/<camera_id>')
 @login_required
 def incident_videos(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
-        flash(f"Camera {camera_id} not found.", "danger")
-        return redirect(url_for('camera_list'))
+        return "Camera not found", 404
     incident_videos_list = camera.load_incident_videos()
     sorted_incident_videos = sorted(incident_videos_list, key=lambda v: v.get('raw_timestamp', 0), reverse=True)
-    return render_template("incident_vid.html", incident_videos=sorted_incident_videos, camera_id=camera_id, username=session['username'], description=camera.description, camera_obj=camera)
+    return render_template("incident_vid.html", incident_videos=sorted_incident_videos, camera_id=camera_id, username=session['username'], description=camera.description)
 
 @app.route('/settings_page/<camera_id>')
 @login_required
 def settings_page(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
-        flash(f"Camera {camera_id} not found.", "danger")
-        return redirect(url_for('camera_list'))
-    
-    # current_settings are already loaded into camera.settings by camera.load_settings()
-    return render_template('settings.html', camera_id=camera_id, username=session['username'], current_settings=camera.settings, description=camera.description, camera_obj=camera)
-
+        return "Camera not found", 404
+    current_settings = {}
+    try:
+        with open(camera.settings_file, 'r') as f:
+            current_settings = json.load(f)
+    except Exception as e:
+        print(f"Error loading settings for camera {camera_id}: {e}")
+        current_settings = {
+            "max_videos": "Error loading",
+            "video_duration": "Error loading"
+        }
+    return render_template('settings.html', camera_id=camera_id, username=session['username'], current_settings=current_settings, description=camera.description)
+    #return render_template('settings.html', camera_id=camera_id, username=session['username'])
 
 @app.route('/update_settings/<camera_id>', methods=['POST'])
 @login_required
 def update_settings(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
-        flash(f"Camera {camera_id} not found.", 'danger')
+        flash(f"Camera {camera_id} not found.", 'error')
         return redirect(url_for("camera_list"))
 
-    try:
-        max_videos = int(request.form.get("max_videos"))
-        video_duration = int(request.form.get("video_duration"))
+    max_videos_str = request.form.get("max_videos")
+    video_duration_str = request.form.get("video_duration")
 
-        if max_videos <= 0 or video_duration <= 0:
-            flash("Max Videos and Video Duration must be positive numbers.", 'danger')
+    error = None 
+    validated_max_videos = None
+    validated_video_duration = None
+
+    if not max_videos_str:
+        error = "Max Videos value cannot be empty."
+    elif not video_duration_str:
+        error = "Video Duration value cannot be empty."
+    else:
+        try:
+            validated_max_videos = int(max_videos_str)
+            validated_video_duration = int(video_duration_str)
+            if validated_max_videos <= 0:
+                error = "Max Videos must be a positive number (greater than zero)."
+            elif validated_video_duration <= 0:
+                error = "Video Duration must be a positive number (greater than zero)."
+
+        except ValueError:
+            error = "Max Videos and Video Duration must be valid whole numbers."
+
+    if error:
+        flash(error, 'error')
+        current_settings = {
+            "max_videos": camera.settings.get("max_videos", 5),
+            "video_duration": camera.settings.get("video_duration", 5)
+        }
+        return render_template('settings.html', camera_id=camera_id, current_settings=current_settings), 400 # Optional: 400 Bad Request status
+    try:
+        success = camera.update_settings(validated_max_videos, validated_video_duration)
+
+        if success is False: 
+             flash(f"Failed to save settings for Camera {camera_id}. Check server logs.", 'error')
         else:
-            if camera.update_settings(max_videos, video_duration):
-                save_cameras_to_json() # Persist settings if Camera class doesn't do it internally
-                flash(f"Settings for Camera {camera_id} updated successfully.", 'success')
-                return redirect(url_for("index", camera_id=camera_id))
-            else:
-                flash(f"Failed to update settings for Camera {camera_id}.", 'danger')
-    except ValueError:
-        flash("Max Videos and Video Duration must be valid whole numbers.", 'danger')
+             flash(f"Settings for Camera {camera_id} updated successfully.", 'success')
+        return redirect(url_for("index", camera_id=camera_id))
+
     except Exception as e:
-        print(f"ERROR during update_settings for Camera {camera_id}: {e}")
-        flash(f"An unexpected error occurred: {str(e)}", 'danger')
-    
-    # On error, re-render settings page with current (or attempted) values
-    return render_template('settings.html', camera_id=camera_id, current_settings=request.form, description=camera.description, username=session['username'], camera_obj=camera)
+        print(f"ERROR during update_settings call for Camera {camera_id}: {e}")
+        flash("An unexpected error occurred while updating settings.", 'error')
+        current_settings = camera.settings
+        return render_template('settings.html', camera_id=camera_id, current_settings=current_settings), 500 # Internal Server Error
+
+
+@app.route("/update_info/<camera_id>", methods=["POST"])
+def update_info(camera_id):
+    return redirect(url_for("videos", camera_id=camera_id))
+
+@app.route("/update_incident_info/<camera_id>", methods=["POST"])
+def update_incident_info(camera_id):
+    return redirect(url_for("incident_videos", camera_id=camera_id))
 
 
 @app.route('/start_recording/<camera_id>', methods=['POST'])
 @login_required
 def start_recording(camera_id):
-    camera = cameras.get(camera_id)
+    camera = cameras.get(camera_id)  
     if camera is None:
-        return jsonify({"success": False, "error": "Camera not found"}), 404
-    
-    if camera.recording:
-        return jsonify({"success": False, "message": "Already recording"}), 200 # Or 409 Conflict
+        return "Camera not found", 404  
 
-    if camera._get_or_init_capture():
-        camera.recording = True
-        Thread(target=camera.record_video, daemon=True).start()
-        flash(f"Started recording for camera {camera_id}.", "info")
-        return jsonify({"success": True, "message": "Recording started"}), 200
-    else:
-        flash(f"Could not initialize camera {camera_id} to start recording.", "danger")
-        return jsonify({"success": False, "error": "Failed to initialize camera"}), 500
-
+    camera.recording = True
+    Thread(target=camera.record_video).start()  
+    return "", 204
 
 @app.route('/stop_recording/<camera_id>', methods=['POST'])
 @login_required
 def stop_recording(camera_id):
-    camera = cameras.get(camera_id)
+    camera = cameras.get(camera_id) 
     if camera is None:
-        return jsonify({"success": False, "error": "Camera not found"}), 404
-
-    if not camera.recording:
-        return jsonify({"success": False, "message": "Not recording"}), 200
+        return "Camera not found", 404  
 
     camera.recording = False
-    flash(f"Stopped recording for camera {camera_id}.", "info")
-    return jsonify({"success": True, "message": "Recording stopped"}), 200
+    return "", 204
 
 @app.route('/simulate_incident/<camera_id>', methods=['POST'])
 @login_required
-def simulate_incident_route(camera_id): # Renamed to avoid conflict
-    camera = cameras.get(camera_id)
+def simulate_incident(camera_id):
+    camera = cameras.get(camera_id)  
     if camera is None:
-        return jsonify({"success": False, "error": "Camera not found"}), 404
-    
-    if camera._get_or_init_capture(): # Ensure camera is ready if simulate_incident needs it
-        Thread(target=camera.simulate_incident, daemon=True).start()
-        flash(f"Incident simulation triggered for camera {camera_id}.", "info")
-        return jsonify({"success": True, "message": "Incident simulation started"}), 200
-    else:
-        flash(f"Could not initialize camera {camera_id} for incident simulation.", "danger")
-        return jsonify({"success": False, "error": "Failed to initialize camera"}), 500
+        return "Camera not found", 404  
 
+    camera.simulate_incident()
+    return '', 204
 
 @app.route("/video_feed/<camera_id>")
-@login_required # Usually video feeds are also protected
 def video_feed(camera_id):
-    camera = cameras.get(camera_id)
+    camera = cameras.get(camera_id) 
     if camera is None:
-        # Return a placeholder image or a 404 text
-        # For now, let's return a simple text response for error
-        return Response("Camera not found", status=404, mimetype='text/plain')
+        return "Camera not found", 404  
+
     return Response(camera.generate_video_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-# --- Video Serving and Deletion Routes (largely unchanged, minor path safety) ---
-@app.route('/serve_video/<camera_id>/recordings/<path:filename>') # Added path converter for filename
-@login_required
+#New Route for video playbacks
+@app.route('/serve_video/<camera_id>/recordings/<filename>')
+@login_required # Keep it protected
 def serve_recorded_video(camera_id, filename):
     camera = cameras.get(camera_id)
-    if not camera: return "Camera not found", 404
+    if not camera:
+        return "Camera not found", 404
     try: 
         directory = os.path.abspath(camera.recordings_dir)
-        # Basic path traversal check
-        if not os.path.abspath(os.path.join(directory, filename)).startswith(directory):
-            return "Forbidden", 403
-        return send_from_directory(directory, filename, as_attachment=False)
-    except FileNotFoundError: return "Video file not found", 404
+        print(f"Serving recorded video: directory='{directory}', filename='{filename}'") # Debug log
+        return send_from_directory(directory, filename, as_attachment=False) # as_attachment=False tries to play inline
+    except FileNotFoundError:
+        print(f"File not found: {os.path.join(directory, filename)}") # Debug log
+        return "Video file not found", 404
     except Exception as e:
         print(f"Error serving recorded video {filename} for camera {camera_id}: {e}")
         return "Error serving video", 500
 
-@app.route('/serve_video/<camera_id>/incidents/<incident_folder>/<path:filename>')
+#New Route for incident playbacks
+@app.route('/serve_video/<camera_id>/incidents/<incident_folder>/<filename>')
 @login_required
 def serve_incident_video(camera_id, incident_folder, filename):
     camera = cameras.get(camera_id)
-    if not camera: return "Camera not found", 404
+    if not camera:
+        return "Camera not found", 404
     try:
-        base_incident_dir = os.path.abspath(camera.incidents_dir)
-        directory = os.path.abspath(os.path.join(base_incident_dir, incident_folder))
-        # Basic path traversal check
-        if not directory.startswith(base_incident_dir) or \
-           not os.path.abspath(os.path.join(directory, filename)).startswith(directory):
-            return "Forbidden", 403
+        directory = os.path.abspath(os.path.join(camera.incidents_dir, incident_folder))
+        print(f"Serving incident video: directory='{directory}', filename='{filename}'") # Debug log
+        # Securely serve the file
         return send_from_directory(directory, filename, as_attachment=False)
-    except FileNotFoundError: return "Incident video file not found", 404
+    except FileNotFoundError:
+        print(f"File not found: {os.path.join(directory, filename)}") # Debug log
+        return "Incident video file not found", 404
     except Exception as e:
-        print(f"Error serving incident video {filename} from {incident_folder} for cam {camera_id}: {e}")
+        print(f"Error serving incident video {filename} from {incident_folder} for camera {camera_id}: {e}")
         return "Error serving video", 500
 
-@app.route('/delete_video/<camera_id>/<path:filename>', methods=['DELETE'])
+#New route for video delete
+@app.route('/delete_video/<camera_id>/<filename>', methods=['DELETE'])
 @login_required
 def delete_recorded_video(camera_id, filename):
     camera = cameras.get(camera_id)
-    if not camera: return jsonify({"success": False, "error": "Camera not found"}), 404
+    if not camera:
+        print (f"[Delete Error] Camera {camera_id} not found for deletion.")
+        return jsonify({"success": False, "error": "Camera not found"}), 404
     
     try: 
         base_recording_dir = os.path.abspath(camera.recordings_dir)
         file_path = os.path.abspath(os.path.join(base_recording_dir, filename))
         if not file_path.startswith(base_recording_dir):
+            print(f"[Delete Error] Path traversal attempt detected or invalid filename for camera {camera_id}: {filename}")
             return jsonify({"success": False, "error": "Invalid filename or path"}), 400
-        
-        if os.path.exists(file_path) and os.path.isfile(file_path): # Ensure it's a file
+        print(f"[Delete Request] Attempting to delete: {file_path}")
+
+        if os.path.exists(file_path):
             os.remove(file_path)
-            return jsonify({"success": True, "message": f"Deleted {filename}"}), 200
+            print(f"[Delete Success] Deleted: {file_path}")
+            return jsonify({"success": True}), 200
         else:
+            print(f"[Delete Error] File not found: {file_path}")
             return jsonify({"success": False, "error": "File not found"}), 404
+    except OSError as e: 
+        print(f"[Delete Error] OS error deleting {file_path}: {e}")
+        return jsonify({"success": False, "error": f"Server error deleting file: {e.strerror}"}), 500
     except Exception as e:
         print(f"[Delete Error] Unexpected error deleting {filename} for camera {camera_id}: {e}")
-        return jsonify({"success": False, "error": "Server error deleting file"}), 500
+        return jsonify({"success": False, "error": "An unexpected server error occurred"}), 500
 
-@app.route('/delete_incident_video/<camera_id>/<incident_folder>/<path:filename>', methods=['DELETE'])
+#New route for deleting incident videos
+@app.route('/delete_incident_video/<camera_id>/<incident_folder>/<filename>', methods=['DELETE'])
 @login_required
 def delete_incident_video(camera_id, incident_folder, filename):
     camera = cameras.get(camera_id)
-    if not camera: return jsonify({"success": False, "error": "Camera not found"}), 404
+    if not camera:
+        print(f"[Delete Incident Error] Camera {camera_id} not found.")
+        return jsonify({"success": False, "error": "Camera not found"}), 404
 
     try:
-        base_incident_dir = os.path.abspath(camera.incidents_dir)
-        incident_folder_path = os.path.abspath(os.path.join(base_incident_dir, incident_folder))
+        base_incident_folder_dir = os.path.abspath(os.path.join(camera.incidents_dir, incident_folder))
 
-        if not incident_folder_path.startswith(base_incident_dir) or not os.path.isdir(incident_folder_path):
+        if not base_incident_folder_dir.startswith(os.path.abspath(camera.incidents_dir)) or not os.path.isdir(base_incident_folder_dir):
+             print(f"[Delete Incident Error] Invalid or non-existent incident folder specified: {incident_folder} for camera {camera_id}")
              return jsonify({"success": False, "error": "Invalid incident folder"}), 400
 
-        file_path = os.path.abspath(os.path.join(incident_folder_path, filename))
-        if not file_path.startswith(incident_folder_path):
-            return jsonify({"success": False, "error": "Invalid filename or path"}), 400
+        file_path = os.path.abspath(os.path.join(base_incident_folder_dir, filename))
 
-        if os.path.exists(file_path) and os.path.isfile(file_path):
+        if not file_path.startswith(base_incident_folder_dir):
+            print(f"[Delete Incident Error] Path traversal attempt or invalid filename within incident folder for camera {camera_id}: {filename}")
+            return jsonify({"success": False, "error": "Invalid filename or path"}), 400 # Bad Request
+
+        print(f"[Delete Incident Request] Attempting to delete: {file_path}")
+
+        if os.path.exists(file_path):
             os.remove(file_path)
-            return jsonify({"success": True, "message": f"Deleted {filename} from {incident_folder}"}), 200
+            print(f"[Delete Incident Success] Successfully deleted: {file_path}")
+        
+            return jsonify({"success": True})
         else:
+            print(f"[Delete Incident Error] File not found: {file_path}")
             return jsonify({"success": False, "error": "File not found"}), 404
+
+    except OSError as e:
+        print(f"[Delete Incident Error] OS error deleting {file_path}: {e}")
+        return jsonify({"success": False, "error": f"Server error deleting file: {e.strerror}"}), 500
     except Exception as e:
-        print(f"[Delete Incident Error] Unexpected error deleting {filename} from {incident_folder} for cam {camera_id}: {e}")
-        return jsonify({"success": False, "error": "Server error deleting file"}), 500
+        print(f"[Delete Incident Error] Unexpected error deleting {filename} (incident) for camera {camera_id}: {e}")
+        return jsonify({"success": False, "error": "An unexpected server error occurred"}), 500
+
+
+def plc_check_and_control_camera():
+    """
+    Connects to the PLC, reads a register, and starts/stops recording
+    for a pre-configured camera based on the read value.
+    This function performs a single read operation per call.
+    """
+    global cameras 
+
+    camera_to_control = cameras.get(PLC_CONTROLLED_CAMERA_ID)
+    if not camera_to_control:
+        # This is not an error if the camera might be added later.
+        # print(f"[PLC] Info: Camera with ID '{PLC_CONTROLLED_CAMERA_ID}' not found for PLC control at this time.")
+        return
+
+    plc = None
+    try:
+        plc = pymcprotocol.Type3E()
+        # It's good practice to set timeouts for network operations
+        plc.set_timeout(connect_timeout=2.0) # Timeout for establishing connection (seconds)
+                                             # Read/write operations will also use this socket timeout.
+        
+        # print(f"[PLC] Attempting to connect to {PLC_IP}:{PLC_PORT}...")
+        plc.connect(PLC_IP, PLC_PORT)
+        # print(f"[PLC] Connected. Reading {PLC_TARGET_REGISTER}...")
+
+        read_values = plc.batchread_wordunits(headdevice=PLC_TARGET_REGISTER, readsize=PLC_READ_SIZE)
+        plc.close() # Close connection immediately after use for a one-shot read
+
+        if read_values:
+            plc_value = read_values[0]
+            # print(f"[PLC] Read {PLC_TARGET_REGISTER} Value: {plc_value}")
+
+            if plc_value == 1: # Trigger START recording
+                if not camera_to_control.recording:
+                    print(f"[PLC] PLC Value is 1. Starting recording for camera '{PLC_CONTROLLED_CAMERA_ID}'.")
+                    camera_to_control.recording = True
+                    thread = Thread(target=camera_to_control.record_video)
+                    thread.daemon = True 
+                    thread.start()
+                # else:
+                    # print(f"[PLC] PLC Value is 1, but camera '{PLC_CONTROLLED_CAMERA_ID}' is already recording.")
+            elif plc_value == 2: # Trigger STOP recording
+                if camera_to_control.recording:
+                    print(f"[PLC] PLC Value is 2. Stopping recording for camera '{PLC_CONTROLLED_CAMERA_ID}'.")
+                    camera_to_control.recording = False
+                # else:
+                    # print(f"[PLC] PLC Value is 2, but camera '{PLC_CONTROLLED_CAMERA_ID}' is not recording.")
+            # else: # Other values
+                # print(f"[PLC] PLC Value is {plc_value}. No action defined for this value.")
+        else:
+            print(f"[PLC] Error: No data read from {PLC_TARGET_REGISTER} (read_values is empty or None).")
+
+    except pymcprotocol.exceptions.PLCSocketError as e:
+        print(f"[PLC] Socket Error (e.g., connection refused, host unreachable): {e}")
+    except pymcprotocol.exceptions.PLCCommunicationError as e:
+        print(f"[PLC] Communication Error (e.g., timeout during read/write): {e}")
+    except pymcprotocol.exceptions.PLCResponseError as e: # Error reported by PLC (e.g. invalid address)
+        print(f"[PLC] PLC Response Error: {e}")
+    except Exception as e:
+        print(f"[PLC] An unexpected error occurred during PLC operation: {e}")
+    finally:
+        if plc and plc.is_connected: # Ensure plc object exists and is connected
+            try:
+                plc.close()
+            except Exception as e_close:
+                print(f"[PLC] Error closing PLC connection: {e_close}")
+
+
+def plc_monitor_loop():
+    """
+    Periodically calls plc_check_and_control_camera.
+    This function runs in a separate thread.
+    """
+    print(f"[PLC Monitor] Starting PLC monitoring thread. Polling interval: {PLC_POLLING_INTERVAL_SECONDS}s. Controlling Camera ID: '{PLC_CONTROLLED_CAMERA_ID}' via {PLC_TARGET_REGISTER}.")
+    while True: 
+        plc_check_and_control_camera() # This function performs a one-time PLC read
+        time.sleep(PLC_POLLING_INTERVAL_SECONDS)
+# --- End PLC Integration Functions ---
 
 
 def release_all_cameras():
     print("Releasing all camera captures on exit...")
     global cameras
-    if cameras:
-        for cam_id, cam_obj in cameras.items():
-             if isinstance(cam_obj, Camera):
-                 if cam_obj.recording: # Stop recording before releasing
-                     cam_obj.recording = False
-                 cam_obj.release_capture()
+    if cameras: # Check if cameras dictionary exists
+        for camera_id, camera in cameras.items():
+             if isinstance(camera, Camera): # Ensure it's a Camera object
+                 camera.release_capture()
         print("Camera release attempts finished.")
     else:
         print("No camera objects found to release.")
 
-def stop_plc_monitor(): # Renamed
-    global plc_monitor_thread_obj # Use the correct global name
-    if plc_monitor_thread_obj and plc_monitor_thread_obj.is_alive():
-        print("Attempting to stop PLC monitor thread...")
-        plc_thread_stop_event.set()
-        plc_monitor_thread_obj.join(timeout=PLC_POLL_INTERVAL + 3) # Give it time to finish current poll + a bit more
-        if plc_monitor_thread_obj.is_alive():
-            print("PLC monitor thread did not stop in time.")
-        else:
-            print("PLC monitor thread stopped successfully.")
-
 atexit.register(release_all_cameras)
-atexit.register(stop_plc_monitor)
-
 
 if __name__ == "__main__":
-    # Create src directory if it doesn't exist, for settings files
-    if not os.path.exists("src"):
-        os.makedirs("src")
-        print("Created 'src' directory for settings files.")
+    load_cameras_from_json() # Load existing camera configurations
 
-    load_cameras_from_json() # Moved after src creation potentially
+    # Start the PLC monitoring thread
+    # This thread will run in the background and periodically check the PLC
+    plc_monitoring_thread = Thread(target=plc_monitor_loop)
+    plc_monitoring_thread.daemon = True  # Daemonize thread: exits when main app exits
+    plc_monitoring_thread.start()
+
     host = '0.0.0.0'
-    
-    # --- Start PLC Monitoring Thread ---
-    # Handle Flask's reloader correctly to avoid starting the thread twice
-    # This check ensures the thread starts only in the main process or when debug is off
-    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        if not cameras:
-            print("No cameras configured. PLC monitoring will not control any cameras but will still run.")
+    # When debug=True, Flask's reloader might start the plc_monitor_loop thread twice.
+    # This is usually fine for development but not for production.
+    # For production, use a proper WSGI server like Gunicorn or uWSGI.
+    use_reloader_flag = app.debug # Flask's debug mode implies reloader typically
+    print(f"Flask app starting. Debug mode: {app.debug}, Use reloader: {use_reloader_flag}")
+    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=True if app.debug else False)
         
-        print("Starting PLC monitoring thread...")
-        plc_thread_stop_event.clear()
-        plc_monitor_thread_obj = Thread(target=plc_monitor_thread_function, daemon=True)
-        plc_monitor_thread_obj.start()
-    else:
-        print("Flask is in debug mode with reloader active. PLC thread will start in the reloaded process.")
-    # --- End Start PLC Monitoring Thread ---
-
-    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=True) # use_reloader=True is default with debug=True
