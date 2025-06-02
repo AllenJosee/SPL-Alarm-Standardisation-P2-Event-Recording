@@ -20,6 +20,8 @@ camera.recording = True
 Thread(target=camera.record_video).start()  
 
 camera.recording = False
+
+camera.simulate_incident()
 '''
 
 if read_value == 1:
