@@ -403,16 +403,22 @@ def index(camera_id):
     while True:
         try:
             read_value = plc.batchread_wordunits(headdevice="D100", readsize=1)
-            print(f"Read D100 Value: {read_value}")
+            #print(f"Read D100 Value: {read_value}")
             if read_value == [1]:
+                print(f"Read D100 Value: {read_value}")
                 print("Preparing to start recording")
                 time.sleep(3)
                 camera.recording = True
                 Thread(target=camera.record_video).start()  
             elif read_value == [2]:
-                print("Preparing to start recording")
+                print(f"Read D100 Value: {read_value}")
+                print("Preparing to stop recording")
                 time.sleep(3)
                 camera.recording = False
+            else:
+                time.sleep(3)
+                print(f"Read D100 Value: {read_value}")
+
             time.sleep(1)  # Wait for a second before the next read
 
         except Exception as e:
