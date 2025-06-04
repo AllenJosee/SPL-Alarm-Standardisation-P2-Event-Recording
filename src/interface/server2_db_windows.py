@@ -2,6 +2,8 @@
 #retrieve and playback?
 #Need add lock function from server3.py
 
+#04062025, this code works on Windows, same as server2_db.py for linux(raspberry pi)
+
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
 import cv2
