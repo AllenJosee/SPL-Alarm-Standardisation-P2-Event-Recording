@@ -1,3 +1,7 @@
+#server3_auto_record.py but with a PiCamera implementation
+
+#not fully implemented yet
+
 #Camera 1 will auto record before the log in, user can navigate to the details page as usual.
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash

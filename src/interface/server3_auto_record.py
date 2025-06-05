@@ -1,3 +1,7 @@
+#Same functionality as server2.py
+#Auto-recording is enabled for camera 1, as soon as the program starts.
+#video savings, and pruning follow the camera1.json settings.
+
 #Camera 1 will auto record before the log in, user can navigate to the details page as usual.
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash

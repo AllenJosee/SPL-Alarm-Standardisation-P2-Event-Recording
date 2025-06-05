@@ -1,4 +1,5 @@
-#object detect on top of live feed
+#Same functionality as server3_auto_record.py
+#Now the live feed will have fave vs helmet detection
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash
 import os

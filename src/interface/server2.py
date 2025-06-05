@@ -1,3 +1,5 @@
+#Optimized version of original server.py for faster load times.
+
 #Cameras only initialized when details page is chosen
 #Very fast initial load time, but camera initialization is delayed until the details page is loaded.
 #Log out or stopping program will relase all cameras

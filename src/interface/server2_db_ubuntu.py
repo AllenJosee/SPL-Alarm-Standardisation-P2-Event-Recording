@@ -1,8 +1,8 @@
 #add the video metadata to sqlite3 database
 #retrieve and playback?
-#Need add lock function from server3.py
+#add lock function from server3.py
 
-#04062025, this code works on Windows, same as server2_db.py for linux(raspberry pi)
+#server2_db.py will work on raspberry pi running ubuntu. same functionalities as server2_db.py
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
@@ -373,7 +373,7 @@ class Camera:
             fourcc = cv2.VideoWriter_fourcc(*"avc1") # Codec (H.264)
             if not hasattr(self, 'settings') or not self.settings: self.load_settings()
             video_duration_seconds = self.settings.get("video_duration", 5)
-            fps = 15 
+            fps = 15
             out = None # Initialize out here
 
             # --- Critical section for VideoWriter setup ---
@@ -618,14 +618,13 @@ class Camera:
     def generate_video_feed(self):
         app.logger.info(f"Attempting to generate live feed for camera {self.camera_id}")
 
-        local_capture_ref = self._ensure_capture_initialized() # Ensures shared capture is ready
+        local_capture_ref = self._ensure_capture_initialized()  # Ensures shared capture is ready
 
-        if not local_capture_ref or not local_capture_ref.isOpened(): # Check the reference returned
+        if not local_capture_ref or not local_capture_ref.isOpened():  # Check the reference returned
             app.logger.error(f"Error: Could not get/initialize shared capture for LIVE FEED on camera {self.camera_id}")
-            # Could yield a placeholder "error" image here            
             return 
 
-        with self.capture_lock: # Increment client count under lock
+        with self.capture_lock:  # Increment client count under lock
             self.active_feed_clients += 1
         app.logger.info(f"Successfully using shared capture for LIVE FEED on camera {self.camera_id}. Active clients: {self.active_feed_clients}")
 
@@ -633,26 +632,44 @@ class Camera:
             while True: 
                 frame_data = None
                 frame_available = False
-                with self.capture_lock: # Lock for reading from shared capture
-                    if not self.capture or not self.capture.isOpened(): # Check shared self.capture
+                with self.capture_lock:  # Lock for reading from shared capture
+                    if not self.capture or not self.capture.isOpened():  # Check shared self.capture
                         app.logger.error(f"Error: Camera {self.camera_id} SHARED capture lost during LIVE FEED.")
-                        break # Exit loop if capture is lost
-                    ret, current_frame = self.capture.read() # Read from shared self.capture
-                    if ret:
-                        frame_data = current_frame.copy() # Important: copy the frame for further processing
-                        frame_available = True
-                
+                        break  # Exit loop if capture is lost
+                    ret, current_frame = self.capture.read()
+                    if not ret or current_frame is None or current_frame.size == 0:
+                        app.logger.debug(f"Captured frame shape: {current_frame.shape}")
+                        app.logger.debug(f"Frame channels: {current_frame.shape}")
+                        app.logger.error(f"Failed to read frame from camera {self.camera_id}.")
+                        continue  # Skip this iteration
+
+                    self.capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                    new_width = 640
+                    new_height = 480
+                    self.capture.set(cv2.CAP_PROP_FPS, 15)
+                    try:
+                        current_frame = cv2.resize(current_frame, (new_width, new_height))  # Correct usage of cv2.resize
+                        #current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
+                        #app.logger.info(f"Frame resized to: {new_width}x{new_height}")
+                    except Exception as e:
+                        app.logger.error(f"Error resizing frame: {e}. Skipping frame.")
+                        continue  # Skip this frame if resizing fails
+                    
+                    frame_data = current_frame.copy()  # Important: copy the frame for further processing
+                    frame_available = True                        
+
                 if not frame_available:
                     app.logger.warning(f"Warning: Could not read frame from camera {self.camera_id} (shared capture) for LIVE FEED.")
-                    time.sleep(0.1) # Avoid busy-looping
-                    continue # Try reading again
+                    time.sleep(0.1)  # Avoid busy-looping
+                    continue  # Try reading again
 
                 # Add recording indicator (red rectangle) if camera is currently recording                
-                if self.recording: # Check recording status
+                if self.recording:  # Check recording status
                     cv2.rectangle(frame_data, (0, 0), (frame_data.shape[1] - 1, frame_data.shape[0] - 1), (0, 0, 255), 10)  # BGR color
 
+                # Encode the frame
                 _, buffer = cv2.imencode(".jpg", frame_data)
-                if buffer is None:
+                if not _:
                     app.logger.warning(f"Warning: cv2.imencode failed for LIVE FEED camera {self.camera_id}")
                     continue
                 frame_bytes = buffer.tobytes()
@@ -663,17 +680,18 @@ class Camera:
                 except GeneratorExit:  # Client disconnected
                     app.logger.info(f"Client disconnected from live feed for camera {self.camera_id}.")
                     break 
-                except Exception as e_yield: # Other error during yield
+                except Exception as e_yield:  # Other error during yield
                     app.logger.error(f"Error yielding frame for camera {self.camera_id} live feed: {e_yield}")
                     break
-                time.sleep(1/30) # Approximate frame rate control (e.g., 30fps)
+                time.sleep(1/30)  # Approximate frame rate control (e.g., 30fps)
         except Exception as e_feed:
             app.logger.error(f"Exception in generate_video_feed for camera {self.camera_id}: {e_feed}")
         finally:
             with self.capture_lock:  # Decrement client count and attempt to release capture if no longer needed
                 self.active_feed_clients -= 1
             app.logger.info(f"Live feed generation ended for camera {self.camera_id}. Active clients: {self.active_feed_clients}")
-            self._release_capture_if_unused() # Attempt to release capture if no longer needed
+            self._release_capture_if_unused()  # Attempt to release capture if no longer needed
+
 
 def format_display_timestamp_sgt(iso_timestamp_str_utc):
         """Converts UTC ISO timestamp string to SGT display string."""

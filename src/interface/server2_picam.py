@@ -16,6 +16,9 @@ from picamera2 import Picamera2, Preview
 import numpy as np
 import pymcprotocol
 
+#server2.py code with picamera2 instead of cv2
+#No database
+#run on raspberry pi (running raspberry pi OS)  04062025
 
 recordings_dir = "src/recordings"
 incidents_dir = "src/incidents"

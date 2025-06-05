@@ -1,3 +1,9 @@
+#to retrieve and manage the database directly
+#Playback, Delete and Download
+#Delete from both the database and the disk
+
+#SQLite DB Browser can be used as alternative. 
+
 from flask import Flask, render_template, jsonify, send_from_directory, request, g
 import sqlite3
 import os
