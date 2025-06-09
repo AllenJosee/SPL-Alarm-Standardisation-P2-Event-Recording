@@ -32,6 +32,8 @@ SRC_DIR = os.path.dirname(SCRIPT_DIR)
 # PROJECT_ROOT_DIR = SPL-Alram-P2-Database/
 PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
 
+SENSOR_DATA_FILE = os.path.join(PROJECT_ROOT_DIR, 'sensor_data.json')
+
 # --- Database Configuration ---
 DATABASE_NAME = 'videos.db'
 TABLE_NAME = 'video_metadata'
@@ -102,6 +104,32 @@ def get_latest_recordings(limit=100):
     latest_recordings = cursor.fetchall()
     conn.close()
     return latest_recordings
+
+def load_sensor_data():
+    """Loads sensor data from the JSON file."""
+    if not os.path.exists(SENSOR_DATA_FILE):
+        return {}  # Return empty dict if file doesn't exist
+    try:
+        with open(SENSOR_DATA_FILE, 'r') as f:
+            data = json.load(f)
+            return data
+    except json.JSONDecodeError:
+        app.logger.error(f"Error decoding JSON from {SENSOR_DATA_FILE}. Returning empty data.")
+        return {}
+    except Exception as e:
+        app.logger.error(f"Error loading sensor data from {SENSOR_DATA_FILE}: {e}")
+        return {}
+
+def save_sensor_data(data):
+    """Saves sensor data to the JSON file."""
+    try:
+        with open(SENSOR_DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+        app.logger.info(f"Sensor data saved to {SENSOR_DATA_FILE}")
+        return True
+    except Exception as e:
+        app.logger.error(f"Error saving sensor data to {SENSOR_DATA_FILE}: {e}")
+        return False
 
 
 class Camera:
@@ -865,25 +893,25 @@ def delete_camera(camera_id):
         incidents_path_to_remove = camera_to_delete.incidents_dir
         settings_path_to_remove = camera_to_delete.settings_file
         
-        # Store the camera_id for DB deletion *before* 'camera_to_delete' might become invalid
-        camera_id_for_db = str(camera_to_delete.camera_id) # Ensure it's a string if DB expects TEXT
+        camera_id_for_db_and_sensor = str(camera_to_delete.camera_id) # Consistent key
 
-        try: 
+        try:
             # 1. Delete from the 'cameras' in-memory dictionary and JSON file
-            del cameras[camera_id]
+            del cameras[camera_id_for_db_and_sensor] # Use the string ID here too for consistency
             save_cameras_to_json()
-            app.logger.info(f"Camera object for ID {camera_id_for_db} removed from memory and cameras.json.")
+            app.logger.info(f"Camera object for ID {camera_id_for_db_and_sensor} removed from memory and cameras.json.")
 
             # 2. Delete physical folders and files (using absolute paths)
+            # ... (your existing code for deleting recordings, incidents, settings files - no change needed here) ...
             absolute_recordings_path = os.path.join(PROJECT_ROOT_DIR, recordings_path_to_remove)
-            if os.path.exists(absolute_recordings_path): # Check absolute path
-                shutil.rmtree(absolute_recordings_path)  # Recursively delete directory
+            if os.path.exists(absolute_recordings_path):
+                shutil.rmtree(absolute_recordings_path)
                 app.logger.info(f"Successfully deleted recordings directory: {absolute_recordings_path}")
             else:
                 app.logger.warning(f"Recordings directory not found, skipping deletion: {absolute_recordings_path}")
 
             absolute_incidents_path = os.path.join(PROJECT_ROOT_DIR, incidents_path_to_remove)
-            if os.path.exists(absolute_incidents_path): # Check absolute path
+            if os.path.exists(absolute_incidents_path):
                 shutil.rmtree(absolute_incidents_path)
                 app.logger.info(f"Successfully deleted incidents directory: {absolute_incidents_path}")
             else:
@@ -896,46 +924,62 @@ def delete_camera(camera_id):
             else:
                 app.logger.warning(f"Settings file not found or path invalid, skipping deletion: {absolute_settings_path}")
 
-            # 3. Delete corresponding video metadata from the database
-            conn = None
-            try:
-                conn = sqlite3.connect(DATABASE_PATH)
-                cursor = conn.cursor()
-                
-                # Delete from normal video_metadata
-                query_delete_recordings = f"DELETE FROM {TABLE_NAME} WHERE camera_id = ?"
-                cursor.execute(query_delete_recordings, (camera_id_for_db,))
-                deleted_recordings_count = cursor.rowcount
-                app.logger.info(f"Deleted {deleted_recordings_count} entries from {TABLE_NAME} for cam_id: {camera_id_for_db}")
 
-                # Delete from incident_video_metadata 
+            # 3. Delete corresponding video metadata from the database
+            # ... (your existing code for deleting from video_metadata and incident_video_metadata tables - no change needed here) ...
+            conn_db = None # Renamed to avoid conflict with outer 'conn' if it existed
+            try:
+                conn_db = sqlite3.connect(DATABASE_PATH)
+                cursor = conn_db.cursor()
+                
+                query_delete_recordings = f"DELETE FROM {TABLE_NAME} WHERE camera_id = ?"
+                cursor.execute(query_delete_recordings, (camera_id_for_db_and_sensor,))
+                deleted_recordings_count = cursor.rowcount
+                app.logger.info(f"Deleted {deleted_recordings_count} entries from {TABLE_NAME} for cam_id: {camera_id_for_db_and_sensor}")
+
                 query_delete_incidents = f"DELETE FROM {INCIDENT_TABLE_NAME} WHERE camera_id = ?"
-                cursor.execute(query_delete_incidents, (camera_id_for_db,))
+                cursor.execute(query_delete_incidents, (camera_id_for_db_and_sensor,))
                 deleted_incidents_count = cursor.rowcount
-                app.logger.info(f"Deleted {deleted_incidents_count} entries from {INCIDENT_TABLE_NAME} for cam_id: {camera_id_for_db}")
+                app.logger.info(f"Deleted {deleted_incidents_count} entries from {INCIDENT_TABLE_NAME} for cam_id: {camera_id_for_db_and_sensor}")
                 
-                conn.commit()
+                conn_db.commit()
             except sqlite3.Error as e:
-                if conn: conn.rollback()
-                app.logger.error(f"DB error deleting metadata for cam_id {camera_id_for_db}: {e}")
-                flash(f"Error deleting records from database for camera {camera_id_for_db}. Check logs.", "error")
+                if conn_db: conn_db.rollback()
+                app.logger.error(f"DB error deleting metadata for cam_id {camera_id_for_db_and_sensor}: {e}")
+                # flash message for DB error already handled in original code
             finally:
-                if conn: conn.close()
-                
-            flash(f"Camera {camera_id_for_db} and all associated data have been deleted.", "success")
+                if conn_db: conn_db.close()
+
+
+            # 4. <<< NEW: Delete sensor information from sensor_data.json >>>
+            all_sensor_data = load_sensor_data()
+            if camera_id_for_db_and_sensor in all_sensor_data:
+                del all_sensor_data[camera_id_for_db_and_sensor]
+                if save_sensor_data(all_sensor_data):
+                    app.logger.info(f"Sensor data for camera ID {camera_id_for_db_and_sensor} deleted from {SENSOR_DATA_FILE}.")
+                else:
+                    app.logger.error(f"Failed to save {SENSOR_DATA_FILE} after deleting sensor data for camera ID {camera_id_for_db_and_sensor}.")
+                    # Optionally flash a warning here if saving failed, though the main camera deletion might still be considered successful.
+                    flash(f"Warning: Could not update sensor data file after deleting sensor info for camera {camera_id_for_db_and_sensor}.", "warning")
+            else:
+                app.logger.info(f"No sensor data found for camera ID {camera_id_for_db_and_sensor} in {SENSOR_DATA_FILE}, skipping sensor data deletion.")
+            # <<< END NEW SECTION >>>
+
+            flash(f"Camera {camera_id_for_db_and_sensor} and all associated data (including sensor info) have been deleted.", "success")
             return redirect(url_for('camera_list'))
 
         except OSError as e:
-            app.logger.error(f"OS Error deleting files/folders for camera {camera_id_for_db}: {e}")
-            flash(f"Error deleting files/folders for camera {camera_id_for_db}.", "error")
-            return redirect(url_for('camera_list')) # Or an error page
-        except Exception as e:
-            app.logger.error(f"Unexpected error deleting camera {camera_id_for_db}: {e}")
-            flash(f"An unexpected error occurred while deleting camera {camera_id_for_db}.", "error")
+            app.logger.error(f"OS Error deleting files/folders for camera {camera_id_for_db_and_sensor}: {e}")
+            flash(f"Error deleting files/folders for camera {camera_id_for_db_and_sensor}.", "error")
             return redirect(url_for('camera_list'))
-        
+        except Exception as e:
+            app.logger.error(f"Unexpected error deleting camera {camera_id_for_db_and_sensor}: {e}")
+            flash(f"An unexpected error occurred while deleting camera {camera_id_for_db_and_sensor}.", "error")
+            return redirect(url_for('camera_list'))
+
     flash(f"Camera {camera_id} not found.", "warning")
-    return "Camera not found", 404
+    return "Camera not found", 404 # Or redirect(url_for('camera_list'))
+
 
 
 @app.route('/feed_view')
@@ -1393,6 +1437,72 @@ def latest_recordings():
     recordings = get_latest_recordings()
     return render_template("latest_recordings.html", recordings=recordings, username=session['username'])'''
 
+@app.route('/sensor_info/<camera_id>', methods=['GET', 'POST'])
+@login_required
+def sensor_info_page(camera_id):
+    camera = cameras.get(camera_id)
+    if not camera:
+        flash(f"Camera {camera_id} not found.", "error")
+        return redirect(url_for('camera_list'))
+
+    all_sensor_data = load_sensor_data()
+    current_sensor_details = all_sensor_data.get(str(camera_id), {}) # Ensure camera_id is string for dict key
+
+    if request.method == 'POST':
+        # Handle saving new/updated sensor info
+        sensor_type = request.form.get('sensor_type', '').strip()
+        sensor_location = request.form.get('sensor_location', '').strip()
+        sensor_notes = request.form.get('sensor_notes', '').strip()
+        # Add more fields as needed
+
+        if not sensor_type and not sensor_location and not sensor_notes: # Basic validation: at least one field should be filled
+            flash("Please provide some information for the sensor.", "warning")
+        else:
+            updated_details = {
+                "type": sensor_type,
+                "location": sensor_location,
+                "notes": sensor_notes
+                # Add other fields from form here
+            }
+            all_sensor_data[str(camera_id)] = updated_details
+            if save_sensor_data(all_sensor_data):
+                flash(f"Sensor information for Camera {camera.description} ({camera_id}) updated successfully.", "success")
+                current_sensor_details = updated_details # Update for immediate display
+            else:
+                flash(f"Failed to save sensor information for Camera {camera.description} ({camera_id}).", "error")
+        # It's often better to redirect after POST to avoid form resubmission issues
+        return redirect(url_for('sensor_info_page', camera_id=camera_id))
+
+
+    # Fetch incident trigger timestamps from the database for this camera
+    incident_timestamps_list = []
+    conn = get_db()
+    cursor = conn.cursor()
+    # Select distinct timestamps to avoid listing the same trigger time multiple times if multiple videos were saved for one incident trigger
+    query = f"""
+        SELECT DISTINCT incident_trigger_timestamp 
+        FROM {INCIDENT_TABLE_NAME} 
+        WHERE camera_id = ? 
+        ORDER BY incident_trigger_timestamp DESC
+    """
+    try:
+        cursor.execute(query, (str(camera_id),))
+        raw_timestamps = cursor.fetchall()
+        for row in raw_timestamps:
+            incident_timestamps_list.append({
+                "raw_iso": row["incident_trigger_timestamp"],
+                "display_sgt": format_display_timestamp_sgt(row["incident_trigger_timestamp"])
+            })
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching incident timestamps for sensor page (cam {camera_id}): {e}")
+        flash("Error loading incident timestamps.", "error")
+
+    return render_template('sensor_info.html',
+                           username=session['username'],
+                           camera_id=camera_id,
+                           camera_description=camera.description,
+                           sensor_details=current_sensor_details,
+                           incident_timestamps=incident_timestamps_list)
 
 def release_all_cameras():
     print("Releasing all camera captures on exit...")

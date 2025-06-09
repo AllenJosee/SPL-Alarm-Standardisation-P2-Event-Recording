@@ -55,15 +55,18 @@ nav {
     box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
 }
     
-.user_info {
+.user_info { /* YOUR ORIGINAL */
     text-align: right;
     padding-right: 15px;
 }
-
-.user_info h1 {
+.user_info h1, .user_info h2 { /* Combined for consistency, h2 for sub-info */
     margin: 0;
-    font-size: 24px;
-} 
+    font-size: 20px; /* Slightly reduced for balance */
+}
+.user_info h2 {
+    font-size: 16px;
+    font-weight: normal;
+}
   
 .container {
     padding: 20px;

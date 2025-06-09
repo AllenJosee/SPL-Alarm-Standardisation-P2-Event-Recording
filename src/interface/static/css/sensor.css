@@ -1,0 +1,426 @@
+/* static/css/sensor.css */
+
+/* ==== YOUR ORIGINAL GENERAL STYLES (Header, Nav, General Buttons) ==== */
+body {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+}
+
+header {
+    background-color: #007BFF;
+    color: white;
+    padding: 10px;
+    text-align: left;
+    padding-left: 20px;
+}
+
+/* Removed your 'nav' block as .navbar is more specific and used */
+
+.navbar { /* YOUR ORIGINAL NAVBAR */
+    display: flex;
+    justify-content: space-between; /* This was your original, adjust if nav-links should be left */
+    align-items: center;
+    padding: 10px;
+    background-color: transparent; /* Assuming this is for the nav bar under the main blue header */
+    border-radius: 20px; /* This might be for individual link containers if nav bar is transparent */
+    height: 60px;
+}
+
+.nav-links { /* YOUR ORIGINAL NAV-LINKS */
+    display: flex;
+    gap: 20px;
+}
+
+.nav-links a { /* YOUR ORIGINAL NAV-LINKS A */
+    text-decoration: none;
+    font-size: 24px;
+    padding: 15px 25px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    margin: 0;
+    color: white; /* This implies navbar background is dark or transparent over dark */
+    background-color: rgba(255, 255, 255, 0); /* Transparent */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease; /* Added color transition */
+}
+.nav-links a:hover { /* YOUR ORIGINAL NAV-LINKS A:HOVER */
+    background-color: #f0f0f0;
+    color: black; /* Text color changes on hover */
+    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2);
+}
+.nav-links a.active { /* Added for active link styling, can be similar to hover */
+    background-color: #e0e0e0; /* Example active style */
+    color: black;
+    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.15);
+    border-color: #adadad;
+}
+
+
+.header-container { /* YOUR ORIGINAL */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+}
+
+.logo-container img { /* YOUR ORIGINAL */
+    height: 60px;
+    width: auto;
+}
+
+.header-text { /* YOUR ORIGINAL */
+    flex-grow: 1;
+    padding-left: 20px;
+}
+
+.header-text h1, .header-text h3 { /* YOUR ORIGINAL */
+    margin: 0;
+}
+
+.user_info { /* YOUR ORIGINAL */
+    text-align: right;
+    padding-right: 15px;
+}
+.user_info h1, .user_info h2 { /* Combined for consistency, h2 for sub-info */
+    margin: 0;
+    font-size: 20px; /* Slightly reduced for balance */
+}
+.user_info h2 {
+    font-size: 16px;
+    font-weight: normal;
+}
+
+form { /* YOUR ORIGINAL */
+    margin-top: 10px;
+}
+
+/* Your general button style - this will apply to <button> elements */
+button { /* YOUR ORIGINAL BUTTON */
+    padding: 20px 20px;
+    background-color: #c9b946; /* Your default button color */
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 18px; /* Added a base font-size */
+    border-radius: 5px; /* Added a slight radius */
+    transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; /* Added transform/shadow */
+}
+button:hover { /* YOUR ORIGINAL BUTTON:HOVER */
+    background-color: #0056b3; /* Your default hover color */
+    transform: scale(1.05); /* Example hover animation */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* Example hover shadow */
+}
+
+
+.control-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 30px;
+}
+.control-button { /* YOUR ORIGINAL CONTROL-BUTTON (used for larger action buttons) */
+    font-size: 24px;
+    padding: 20px 40px;
+    border: none;
+    border-radius: 30px; /* Your distinct radius */
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    text-decoration: none; /* If used on <a> tags */
+    display: inline-block; /* For <a> tags to behave like buttons */
+    text-align: center;
+    justify-content: center;
+
+}
+.control-button:hover { /* YOUR ORIGINAL CONTROL-BUTTON:HOVER */
+    transform: scale(1.15);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+}
+.control-button.green { background-color: green; }
+.control-button.orange { background-color: orange; }
+.control-button.red { background-color: red; }
+.control-button.blue { background-color: #007BFF; } /* Your blue */
+
+
+/* ==== STYLES NEEDED FOR SENSOR_INFO.HTML LAYOUT AND SPECIFIC ELEMENTS ==== */
+
+/* Main Container for the page content */
+.container {
+    padding: 20px;
+    /* Option A: Full width with padding */
+    width: 100%;
+    box-sizing: border-box; /* Important if you have padding and want width: 100% to mean full viewport */
+    margin: 20px 0; 
+}
+
+.page-title {
+    text-align: center;
+    padding: 10px 0 20px 0;
+    color: #333;
+    font-size: 2em; /* Larger page title */
+    margin-bottom: 20px;
+}
+
+/* Flash Messages (using your existing .alert-category styles) */
+.flash-message-container {
+    width: 95%;
+    max-width: 800px;
+    margin: 10px auto 20px auto;
+}
+.alert { /* Base alert - you already have this */
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    text-align: center;
+}
+.alert-success { /* Your existing */
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+.alert-error { /* Your existing */
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+.alert-warning { /* Your existing */
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+.alert-info { /* Your existing */
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+
+
+/* Info Section Styling (common for all boxes on sensor_info page) */
+.info-section {
+    background-color: #ffffff;
+    padding: 25px; /* Increased padding */
+    margin-bottom: 20px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+}
+.info-section h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 12px;
+    margin-bottom: 18px;
+    font-size: 1.5em; /* Slightly larger section headings */
+    color: #343a40;
+}
+.info-section p,
+.info-section li {
+    font-size: 1em;
+    line-height: 1.7; /* Increased line height for readability */
+    color: #495057;
+}
+.info-section ul {
+    list-style: none;
+    padding-left: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #f0f0f0; /* Light border around scrollable list */
+    padding: 10px;
+    border-radius: 4px;
+}
+.info-section ul li {
+    padding: 8px 5px;
+    border-bottom: 1px dotted #e9ecef;
+}
+.info-section ul li:last-child {
+    border-bottom: none;
+}
+
+/* Form Specific Styles for sensor_info.html */
+.form-label {
+    font-weight: bold;
+    margin-top: 15px; /* Increased spacing */
+    display: block;
+    color: #495057;
+    margin-bottom: 8px;
+}
+.form-input,
+.form-textarea {
+    width: 100%;
+    padding: 12px; /* More padding */
+    margin-bottom: 15px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.form-input:focus,
+.form-textarea:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+.form-textarea {
+    min-height: 120px; /* Taller textarea */
+    resize: vertical;
+}
+
+/* Submit button for the sensor form - inherits from your 'button' but can be more specific */
+.submit-button { /* YOUR ORIGINAL SUBMIT BUTTON */
+    font-size: 18px; /* Adjusted to match general button */
+    padding: 12px 25px; /* Adjusted padding */
+    border: none;
+    border-radius: 5px; /* Consistent with general button */
+    background-color: #28a745; /* Specific green for save */
+    color: white;
+    cursor: pointer;
+    margin-top: 15px; /* Adjusted margin */
+    /* Transitions inherited from general 'button' if not overridden */
+}
+.submit-button:hover {
+    background-color: #218838; /* Darker green on hover */
+    /* Hover animations from general 'button:hover' will apply if not overridden */
+}
+
+
+/* Two-Column Layout */
+.two-column-layout {
+    display: flex;
+    flex-wrap: wrap; /* Allows stacking on smaller screens if min-width is hit */
+    gap: 25px;
+    margin-bottom: 25px;
+    /* align-items: stretch; */ /* Optional: makes columns same height if they have borders/backgrounds */
+}
+
+.column {
+    /* flex: 1; REMOVE THIS if using specific flex-basis percentages */
+    /* min-width: 320px; This is still good for responsiveness */
+    display: flex;       /* To allow .info-section to grow if needed */
+    flex-direction: column;
+}
+
+/* Specific column widths */
+.column.sensor-details-column {
+    flex-basis: 40%; /* Desired width: 40% */
+    min-width: 300px; /* Still allow it to shrink and then wrap */
+}
+
+.column.timestamps-column {
+    flex-basis: calc(60% - 25px); /* Desired width: 60%, subtract the gap for accuracy */
+    /* Alternative for 60% if you don't mind slight overflow/underflow due to gap: flex-basis: 60%; */
+    min-width: 300px; /* Still allow it to shrink and then wrap */
+}
+/* If you want them to grow and shrink from this basis: */
+.column.sensor-details-column,
+.column.timestamps-column {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+
+.column .info-section {
+    flex-grow: 1; /* Make the info-section expand to fill column height */
+    display: flex; /* To allow content within info-section to also flex if needed */
+    flex-direction: column;
+}
+/* If the form inside sensor-details-column should also grow: */
+.column.sensor-details-column .info-section form {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Makes form take available space */
+}
+.column.sensor-details-column .info-section form .form-textarea {
+    flex-grow: 1; /* Makes textarea take available space within the form */
+}
+
+
+/* Action Buttons Container and Links for sensor_info.html footer */
+.action-buttons-container {
+    text-align: center;
+    margin-top: 30px;
+    margin-bottom: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+}
+/* Using your .control-button style for these links by adding the class in HTML */
+/* No new CSS needed if HTML uses <a class="control-button blue" ...> */
+
+
+/* No Data Placeholder */
+.no-data {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 20px 0; /* More padding */
+}
+
+/* Styles for video feed if they are global (from your original sensor.css) */
+/* If these are only for index.html, they should be in index.css */
+.video-feed-container {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    margin: 20px auto;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    height: 0;
+    padding-top: 56.25%;
+    background-color: #e0e0e0;
+}
+.video-image-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+#video-feed-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 6px;
+    object-fit: cover;
+}
+.spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #3498db;
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+}
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.video-feed-container.recording {
+    border: 5px solid red;
+    box-sizing: border-box;
+}
+.video-feed-container.error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+.video-feed-container.error::after {
+   content: "⚠ Feed Error";
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   color: #721c24;
+   font-weight: bold;
+}
+.video-feed-container.error .video-image-wrapper {
+    display: none;
+}

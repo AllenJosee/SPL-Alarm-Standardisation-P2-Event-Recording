@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Information for {{ camera_description }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sensor.css') }}">
+</head>
+<body>
+    <!-- ... (header and nav remain the same) ... -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='images/shimano_logo.jpg') }}" alt="Shimano Logo" class="logo">
+            </div>
+            <div class="header-text">
+                <h1>Shimano Singapore</h1>
+                <h3>ADS Fault Monitoring Dashboard</h3>
+            </div>
+            <div class="user_info">
+                <h1>Welcome {{ username }}!</h1>
+                {% if sensor_details and sensor_details.get('type') %}
+                    <h2>Sensor : {{ sensor_details.get('type') }}</h2>
+                {% elif sensor_details and (sensor_details.get('location') or sensor_details.get('notes')) %}
+                    <h2>Sensor Info Available</h2>
+                {% else %}
+                    <h2>Sensor Info: N/A</h2> {# Or just leave it completely blank: <h2></h2> #}
+                {% endif %}
+            </div>
+        </div>
+        <nav class="navbar">
+            <div class="nav-links">
+                <a href="{{ url_for('index', camera_id=camera_id) }}">Home</a>
+                <a href="{{ url_for('videos', camera_id=camera_id) }}">Recordings</a>
+                <a href="{{ url_for('incident_videos', camera_id=camera_id) }}">Incidents</a>
+                <a href="{{ url_for('sensor_info_page', camera_id=camera_id) }}" class="active">Sensor Info</a>
+                <a href="{{ url_for('settings_page', camera_id=camera_id) }}">Settings</a>
+                <a href="{{ url_for('camera_list') }}">All Cameras</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <h1 class="page-title">Sensor Information for {{ camera_description }} (ID: {{ camera_id }})</h1>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-message-container">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category else 'info' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Two-Column Layout for Sensor Details and Timestamps -->
+        <div class="two-column-layout">
+            <!-- Column 1: Sensor Details & Form Section -->
+            <div class="column sensor-details-column"> {# ADDED sensor-details-column CLASS #}
+                <div class="info-section">
+                    <h3>Sensor Details</h3>
+                    <form method="POST" action="{{ url_for('sensor_info_page', camera_id=camera_id) }}">
+                        <div>
+                            <label for="sensor_type" class="form-label">Sensor Type:</label>
+                            <input type="text" id="sensor_type" name="sensor_type" class="form-input" value="{{ sensor_details.get('type', '') }}" placeholder="e.g., PIR, Motion Detector">
+                        </div>
+                        <div>
+                            <label for="sensor_location" class="form-label">Sensor Location:</label>
+                            <input type="text" id="sensor_location" name="sensor_location" class="form-input" value="{{ sensor_details.get('location', '') }}" placeholder="e.g., Main Entrance">
+                        </div>
+                        <div>
+                            <label for="sensor_notes" class="form-label">Additional Notes/Status:</label>
+                            <textarea id="sensor_notes" name="sensor_notes" class="form-textarea" placeholder="e.g., Sensitivity: High...">{{ sensor_details.get('notes', '') }}</textarea>
+                        </div>
+                        <button type="submit" class="submit-button">Save Sensor Info</button>
+                    </form>
+                    {% if not sensor_details.type and not sensor_details.location and not sensor_details.notes %}
+                        <p class="no-data" style="margin-top:15px;">No sensor information added yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Column 2: Trigger Timestamps Section -->
+            <div class="column timestamps-column"> {# ADDED timestamps-column CLASS #}
+                <div class="info-section">
+                    <h3>Incident Trigger Timestamps (SGT)</h3>
+                    {% if incident_timestamps %}
+                        <ul>
+                            {% for ts_entry in incident_timestamps %}
+                                <li>{{ ts_entry.display_sgt }} (UTC: {{ ts_entry.raw_iso }})</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="no-data">No incident trigger timestamps recorded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div> <!-- End of two-column-layout -->
+
+        <!-- ... (Bottom Section: Camera Information and Action Buttons remain the same) ... -->
+        <div class="info-section">
+            <h3>Camera Information</h3>
+            <p><strong>Description:</strong> {{ camera_description }}</p>
+            <p><strong>Camera ID:</strong> {{ camera_id }}</p>
+        </div>
+
+        <!-- <div class="action-buttons-container">
+            <a href="{{ url_for('incident_videos', camera_id=camera_id) }}" class="action-button-link">View All Incident Videos</a>
+            <a href="{{ url_for('camera_list') }}" class="action-button-link secondary">Back to Camera List</a>
+        </div> -->
+
+        <div class="control-buttons">
+            <a href="{{ url_for('incident_videos', camera_id=camera_id) }}" class="control-button green">View All Incident Videos</a>
+            <a href="{{ url_for('camera_list') }}" class="control-button blue">Back to Camera List</a>
+            </div>
+        </div>
+
+    </div> <!-- End of container -->
+</body>
+</html>
