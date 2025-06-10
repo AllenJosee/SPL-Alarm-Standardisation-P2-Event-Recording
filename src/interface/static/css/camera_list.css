@@ -180,13 +180,13 @@ button:hover {
     margin: 0;
 }
 
-.user_info { /* YOUR ORIGINAL */
+.user_info { 
     text-align: right;
     padding-right: 15px;
 }
-.user_info h1, .user_info h2 { /* Combined for consistency, h2 for sub-info */
+.user_info h1, .user_info h2 { 
     margin: 0;
-    font-size: 20px; /* Slightly reduced for balance */
+    font-size: 20px; 
 }
 .user_info h2 {
     font-size: 16px;
@@ -293,11 +293,10 @@ button:hover {
 
 .camera-item .camera-actions form,
 .camera-item .camera-actions a {
-    margin: 0; /* Remove default margins that might interfere */
+    margin: 0; 
 }
 
 /* --- Custom Modal Styles --- */
-
 .modal-overlay {
     position: fixed; /* Sit on top of the page content */
     top: 0;
@@ -380,14 +379,13 @@ button:hover {
 }
 
 #confirmLogoutBtn {
-    background-color: #dc3545; /* Example: Bootstrap's danger red */
-    color: white;             /* Example: White text */
-    border-color: #c82333;   /* Example: Slightly darker border */
-    /* Add any other styles like padding, font-weight if needed */
+    background-color: #dc3545; 
+    color: white;            
+    border-color: #c82333;   
 }
 
 /* Optional: Style on hover */
 #confirmLogoutBtn:hover {
-    background-color: #c82333; /* Example: Darker red on hover */
+    background-color: #c82333; 
     border-color: #bd2130;
 }

@@ -1,9 +1,5 @@
 
 body {
-    /* background-image: url("../images/bg1.jpg");
-    background-size: cover; 
-    background-repeat: no-repeat; 
-    background-position: center center; */
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -85,13 +81,13 @@ nav {
     margin: 0;
 }
 
-.user_info { /* YOUR ORIGINAL */
+.user_info { 
     text-align: right;
     padding-right: 15px;
 }
-.user_info h1, .user_info h2 { /* Combined for consistency, h2 for sub-info */
+.user_info h1, .user_info h2 { 
     margin: 0;
-    font-size: 20px; /* Slightly reduced for balance */
+    font-size: 20px; 
 }
 .user_info h2 {
     font-size: 16px;
@@ -116,10 +112,9 @@ button {
 }
 
 .control-buttons form {
-    margin: 0; /* Remove default form margins */
-    padding: 0; /* Remove default form padding */
-    display: inline-block; /* Or 'contents' if you want the form to not affect layout at all */
-                           /* 'contents' makes the form's children act as direct children of the form's parent for layout purposes */
+    margin: 0; 
+    padding: 0; 
+    display: inline-block; 
 }
 
 button:hover {
@@ -190,7 +185,7 @@ button:hover {
     padding: 20px;
     background-color: white;
     text-align: center;
-    width: 100%; /* Or set a specific max-width */
+    width: 100%; 
     max-width: 640px; /* Example max width */
     max-height: 510px;
 }
@@ -345,33 +340,26 @@ button:hover {
     left: 0;
     width: 100%;
     height: 100%;
-    /* Optional: If border was thick, add slight padding here */
-    /* padding: 2px; */
-    /* box-sizing: border-box; */
 }
   
 #video-feed-img {
-    /* Image now fills the WRAPPER */
     display: block;
     width: 100%;
     height: 100%;
-    border: none; /* IMPORTANT: No border on the image itself */
-    /* Apply radius here if you want image corners rounded INSIDE border */
-     border-radius: 6px; /* Slightly smaller than container radius */
+    border: none; 
+    border-radius: 6px; 
     object-fit: cover;
   }
   
 .spinner {
     /* Spinner will be visible by default, hidden by JS */
-    border: 6px solid #f3f3f3; /* Light grey border */
-    border-top: 6px solid #3498db; /* Blue color for top border */
+    border: 6px solid #f3f3f3; 
+    border-top: 6px solid #3498db; 
     border-radius: 50%; /* Make it circular */
-    width: 100px; /* Spinner size */
-    height: 100px; /* Spinner size */
+    width: 100px; 
+    height: 100px; 
     animation: spin 1s linear infinite; /* Animation properties */
     position: absolute; /* Position relative to the container */
-    /* Centering is handled by flexbox on parent now,
-       but keep this as fallback or if you remove flexbox */
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -386,9 +374,9 @@ button:hover {
   
 
 .video-feed-container.recording {
-    border: 5px solid red; /* Adjust thickness as needed */
+    border: 5px solid red; 
     /* Padding might need adjustment if border adds too much space */
-    /* padding: 1px; */ /* Example if border affects layout */
+    /* padding: 1px; */ 
     box-sizing: border-box; /* Include border in element's total width/height */
 }
   

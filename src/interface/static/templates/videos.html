@@ -45,7 +45,7 @@
             <button onclick="resetTable()" class="action-button cancel-button">Cancel Search</button>
         </div>
         
-        <!-- Delete Confirmation Modal (remains largely the same) -->
+        <!-- Delete Confirmation Modal -->
         <div id="deleteConfirmModalOverlay" class="modal-overlay" style="display: none;"></div>
         <div id="deleteConfirmModal" class="modal" style="display: none;">
             <div class="modal-header">
@@ -64,7 +64,7 @@
         <table class="styled-table">
             <thead>
                 <tr>
-                    <!-- Optional: Add ID column if you want to display it -->
+                    <!-- Optional: Add ID column -->
                     <!-- <th>DB ID</th> -->
                     <th class="sortable">
                         {% set next_filename_order = 'asc' if current_sort_by == 'filename' and current_sort_order == 'desc' else 'desc' %}
@@ -87,17 +87,14 @@
             </thead>
             <tbody id="videoTableBody">
                 {% for video in videos %}  {# Assuming 'videos' is the list from your Flask route #}
-                <tr data-video-id="{{ video.id }}"> {# Add data-video-id to the row for easier selection #}
-                    <!-- <td>{{ video.id }}</td> --> {# Display if you added the TH #}
+                <tr data-video-id="{{ video.id }}"> 
+                    <!-- <td>{{ video.id }}</td> --> 
                     <td>{{ video.filename }}</td>
-                    <td>{{ video.display_timestamp if video.display_timestamp else video.timestamp }}</td> {# Prefer display_timestamp from file ctime if available #}
+                    <td>{{ video.display_timestamp if video.display_timestamp else video.timestamp }}</td> 
                     <td class="actions">
                         {# UPDATED: Play button now calls playMainVideo with video.id #}
                         <button onclick="playMainVideo('{{ video.id }}')" class="action-button play-button">Play</button>
-                        
-                        {# Download: Assuming this route still works or you'll create a DB ID based one #}
-                        {# If you create /download_main_video/<video_db_id>: #}
-                        
+                                                
                         <a href="{{ url_for('serve_main_recorded_video', video_db_id=video.id) }}" class="action-button download-button" download>Download</a>
                         {# UPDATED: Delete button now calls showVideoDeleteConfirmation with video.id and filename #}
                         <button type="button" onclick="showVideoDeleteConfirmation(event, '{{ video.id }}', '{{ video.filename }}', this)" class="action-button delete-button">Delete</button>
@@ -261,7 +258,7 @@
         cancelVideoDeleteBtn.addEventListener('click', hideVideoDeleteModal);
         if (videoModalOverlay) videoModalOverlay.addEventListener('click', hideVideoDeleteModal); // Check if exists
 
-        // Search and Reset Table functions (remain the same, operate on displayed text)
+        // Search and Reset Table functions
         function searchTable(){
             var input = document.getElementById('searchInput').value.toLowerCase();
             var tableBody = document.getElementById('videoTableBody');
@@ -269,9 +266,7 @@
             for (var i = 0; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
                 var found = false;
-                // Assuming filename is in first data cell (index 0 if no DB ID shown, 1 if DB ID is shown)
-                // And timestamp is in the next cell. Adjust indices if your table structure changed.
-                // Let's assume no DB ID shown: filename at cells[0], timestamp at cells[1]
+                //No DB ID shown in this table, filename is the first data cell
                 if (cells.length > 1) { // Make sure cells exist
                     var filenameText = cells[0].textContent.toLowerCase();
                     var timestampText = cells[1].textContent.toLowerCase();

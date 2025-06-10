@@ -24,18 +24,16 @@
             {% if error %}
                 <p class="error-message">{{ error }}</p>
             {% endif %}
-            <form class="login-form" method="POST" action="{{ url_for('add_camera') }}"> <!-- <<< CHANGE: Added action for clarity >>> -->
+            <form class="login-form" method="POST" action="{{ url_for('add_camera') }}"> 
                 <label for="description"> Camera Name/Description : </label>
                 <input type="text" name="description" placeholder="Eg. Front Gate" id="description" value="{{ description | default('') }}" required>
 
-                <!-- <<< CHANGE: Add input for device index >>> -->
                 <!--<label for="device_index">Camera Device Index:</label>
                 <input type="number" min="0" class="form-control" id="device_index" name="device_index" value="{{ device_index | default(0) }}" required>
                 <small class="form-text text-muted">Usually 0 for default webcam, 1 for next, etc.</small>-->
-                <!-- <<< END CHANGE >>> -->
 
                 <button type="submit" class="login-button">Add Camera</button>
-                <a href="{{ url_for('camera_list') }}" class="login-button cancel-button">Cancel</a> <!-- <<< CHANGE: Added class for styling cancel >>> -->
+                <a href="{{ url_for('camera_list') }}" class="login-button cancel-button">Cancel</a> 
             </form>
         </div>
     </div>

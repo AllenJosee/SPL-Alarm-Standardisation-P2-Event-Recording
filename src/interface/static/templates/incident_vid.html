@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Incident Videos for {{ description }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/incident.css') }}"> <!-- Or videos.css if styles are shared -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/incident.css') }}"> 
     <style> /* Adding basic sort arrow style if not in incident.css */
         th.sortable a { text-decoration: none; color: inherit; display: block; }
         th.sortable a:hover { text-decoration: underline; color: #007bff; }
@@ -41,7 +41,6 @@
     <div class="container">
         <h1 style="text-align: center; padding-bottom: 10px;">Incident Video List for {{ description }}</h1>
         <div class="center-container">
-            <!-- "Update Info" button might not be needed -->
             <!-- <form method="POST" action="{{ url_for('update_incident_info', camera_id=camera_id) }}">
                 <button type="submit" class="action-button update-button">Update Info</button>
             </form> -->
@@ -93,7 +92,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody id="incidentTableBody"> {# Changed ID for clarity #}
+            <tbody id="incidentTableBody"> 
                 {% for incident in incident_videos %} {# Renamed loop variable for clarity #}
                 <tr data-incident-id="{{ incident.id }}">
                     <!-- <td>{{ incident.id }}</td> -->
@@ -102,7 +101,6 @@
                     <td>{{ incident.display_timestamp if incident.display_timestamp else incident.timestamp }}</td> {# This is incident_trigger_timestamp #}
                     <td class="actions">
                         <button onclick="playMainIncidentVideo('{{ incident.id }}')" class="action-button play-button">Play</button>
-                        {# Assuming serve_main_incident_video can also handle downloads with the 'download' attribute #}
                         <a href="{{ url_for('serve_main_incident_video', incident_db_id=incident.id) }}" class="action-button download-button" download>Download</a>
                         <button type="button" onclick="showIncidentDeleteConfirmation(event, '{{ incident.id }}', '{{ incident.filename }}', this)" class="action-button delete-button">Delete</button>
                     </td>

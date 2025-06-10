@@ -73,43 +73,34 @@
                 const feedContainerForStatus = document.querySelector('.video-feed-container');
 
                 function showRecordingStatus() {
-                    // Keep status circle/message logic if you still use it
                     const statusCircle = document.getElementById('status-circle');
                     if (statusCircle) statusCircle.className = 'status-circle recording';
                     const statusMessage = document.getElementById('status-message');
                     if (statusMessage) statusMessage.innerText = 'Recording...';
 
-                    // Add recording class to the CONTAINER for the border
                     if (feedContainerForStatus) {
                         feedContainerForStatus.classList.add('recording');
                     }
                 }
 
-                function hideStatus() { // Renamed from hideStatus for clarity if needed elsewhere, or keep as is
-                    // Keep status circle/message logic if you still use it
+                function hideStatus() { 
                     const statusCircle = document.getElementById('status-circle');
                     if (statusCircle) statusCircle.className = 'status-circle';
                     const statusMessage = document.getElementById('status-message');
-                    if (statusMessage) statusMessage.innerText = 'Recording stopped.'; // Or clear it
+                    if (statusMessage) statusMessage.innerText = 'Recording stopped.'; 
 
-                    // Remove recording class from the CONTAINER
                     if (feedContainerForStatus) {
                         feedContainerForStatus.classList.remove('recording');
                     }
                 }
 
                 function showIncidentStatus() {
-                    // Keep status circle/message logic if you still use it
                     const statusCircle = document.getElementById('status-circle');
                     if (statusCircle) statusCircle.className = 'status-circle incident';
                     incidentCount++;
                     const statusMessage = document.getElementById('status-message');
                     if (statusMessage) statusMessage.innerText = `Incident simulated. Count: ${incidentCount}`;
                     console.log('Incident status shown');
-                    // Maybe remove recording border if incident stops recording?
-                    // if (feedContainerForStatus) {
-                    //    feedContainerForStatus.classList.remove('recording');
-                    // }
         }
             </script>
             <script>
@@ -123,13 +114,11 @@
                         feedSpinner.style.display = 'none';
                     }
                     if (videoFeedImg) {
-                        videoFeedImg.style.display = 'block'; // *** Explicitly ensure image is displayed ***
-                        videoFeedImg.classList.remove('error-state'); // Remove error class if re-loading after error
+                        videoFeedImg.style.display = 'block'; 
+                        videoFeedImg.classList.remove('error-state'); 
                     }
                     if (feedContainer) {
                         feedContainer.style.background = 'none';
-                        // Keep padding-top if using that method
-                        // feedContainer.style.minHeight = 'auto'; // Not needed with aspect ratio methods
                         feedContainer.classList.remove('error');
                     }
                 }
@@ -140,21 +129,18 @@
                         feedSpinner.style.display = 'none';
                     }
                     if (videoFeedImg) {
-                        videoFeedImg.style.display = 'none'; // Hide broken image
-                        videoFeedImg.classList.add('error-state'); // Add error class
+                        videoFeedImg.style.display = 'none'; 
+                        videoFeedImg.classList.add('error-state'); 
                     }
                 if (feedContainer) {
                         feedContainer.classList.add('error');
-                        // Ensure container keeps size on error if using padding-top
-                        // feedContainer.style.paddingTop = '56.25%'; // Re-assert if needed
                 }
                 }
 
-                // Initial check remains the same
                 if (videoFeedImg.complete && videoFeedImg.naturalHeight !== 0) {
                     handleFeedLoad();
                 } else if (videoFeedImg.complete) {
-                handleFeedError(); // Treat complete but no height as error
+                handleFeedError(); 
                 }
             </script>
             <script>

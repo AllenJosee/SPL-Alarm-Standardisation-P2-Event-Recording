@@ -1,9 +1,11 @@
 #add the video metadata to sqlite3 database
 #retrieve and playback?
-#Need add lock function from server3.py
+#Need add lock function from server3.py #Done and Implemented.
 
 #04062025, works on Windows, same as server2_db_ubuntu.py for raspberry pi(Linux-ubuntu)
 #server2.py + SQLite database = server2_db.py
+
+#10062025, Sensor info page and route added. Load from JSON file
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
@@ -405,7 +407,6 @@ class Camera:
             fps = 15 
             out = None # Initialize out here
 
-            # --- Critical section for VideoWriter setup ---
             try:
                 with self.capture_lock: # Protect access to self.capture for getting properties
                     if not self.capture or not self.capture.isOpened():
@@ -426,7 +427,6 @@ class Camera:
                     app.logger.error(f"Cam {self.camera_id}: Failed to open VideoWriter for {absolute_filepath_for_cv}"); time.sleep(1); continue
             except Exception as e:
                 app.logger.error(f"Cam {self.camera_id}: Error creating VideoWriter: {e}"); time.sleep(1); continue
-            # --- End critical section for VideoWriter setup ---
 
             if out and out.isOpened(): # Ensure out was successfully created
                 frame_count = 0
@@ -902,7 +902,6 @@ def delete_camera(camera_id):
             app.logger.info(f"Camera object for ID {camera_id_for_db_and_sensor} removed from memory and cameras.json.")
 
             # 2. Delete physical folders and files (using absolute paths)
-            # ... (your existing code for deleting recordings, incidents, settings files - no change needed here) ...
             absolute_recordings_path = os.path.join(PROJECT_ROOT_DIR, recordings_path_to_remove)
             if os.path.exists(absolute_recordings_path):
                 shutil.rmtree(absolute_recordings_path)
@@ -926,7 +925,6 @@ def delete_camera(camera_id):
 
 
             # 3. Delete corresponding video metadata from the database
-            # ... (your existing code for deleting from video_metadata and incident_video_metadata tables - no change needed here) ...
             conn_db = None # Renamed to avoid conflict with outer 'conn' if it existed
             try:
                 conn_db = sqlite3.connect(DATABASE_PATH)
@@ -946,12 +944,11 @@ def delete_camera(camera_id):
             except sqlite3.Error as e:
                 if conn_db: conn_db.rollback()
                 app.logger.error(f"DB error deleting metadata for cam_id {camera_id_for_db_and_sensor}: {e}")
-                # flash message for DB error already handled in original code
             finally:
                 if conn_db: conn_db.close()
 
 
-            # 4. <<< NEW: Delete sensor information from sensor_data.json >>>
+            # 4. <<< Delete sensor information from sensor_data.json >>>
             all_sensor_data = load_sensor_data()
             if camera_id_for_db_and_sensor in all_sensor_data:
                 del all_sensor_data[camera_id_for_db_and_sensor]
@@ -959,11 +956,9 @@ def delete_camera(camera_id):
                     app.logger.info(f"Sensor data for camera ID {camera_id_for_db_and_sensor} deleted from {SENSOR_DATA_FILE}.")
                 else:
                     app.logger.error(f"Failed to save {SENSOR_DATA_FILE} after deleting sensor data for camera ID {camera_id_for_db_and_sensor}.")
-                    # Optionally flash a warning here if saving failed, though the main camera deletion might still be considered successful.
                     flash(f"Warning: Could not update sensor data file after deleting sensor info for camera {camera_id_for_db_and_sensor}.", "warning")
             else:
                 app.logger.info(f"No sensor data found for camera ID {camera_id_for_db_and_sensor} in {SENSOR_DATA_FILE}, skipping sensor data deletion.")
-            # <<< END NEW SECTION >>>
 
             flash(f"Camera {camera_id_for_db_and_sensor} and all associated data (including sensor info) have been deleted.", "success")
             return redirect(url_for('camera_list'))
@@ -1078,7 +1073,7 @@ ALLOWED_SORT_COLUMNS_INCIDENTS = {
 
 @app.route('/incident_videos/<camera_id>')
 @login_required
-def incident_videos(camera_id): # Route function name is fine
+def incident_videos(camera_id):
     camera = cameras.get(camera_id)
     if camera is None:
         flash(f"Camera {camera_id} not found.", "error")
@@ -1528,7 +1523,7 @@ def sensor_info_page(camera_id):
                            camera_description=camera.description,
                            sensor_details=current_sensor_details,
                            incident_timestamps=incident_timestamps_list,
-                           total_recordings=total_recordings,                 # Pass new variable
+                           total_recordings=total_recordings,               
                            total_incident_clips=total_incident_clips)
 
 def release_all_cameras():

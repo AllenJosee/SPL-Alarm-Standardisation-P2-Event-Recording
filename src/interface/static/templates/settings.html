@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title >ADS Fault Monitoring Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
-    <!-- Include your CSS file here -->
 </head>
 <body>
     <header class="header">
-        <!-- Header content remains the same -->
         <div class="header-container">
             <div class="logo-container">
                 <img src="{{ url_for('static', filename='images/shimano_logo.jpg') }}" alt="Testing" class="logo">
@@ -38,10 +36,8 @@
     <h1 style="text-align: center; padding: 10px;"> {{ description }} Settings</h1>
 
     <div class="settings-container">
-        <!-- Current Settings Display -->
         <div class="current-settings" style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
             <h3 style="margin-top: 0; color: #333; font-size: 1.4rem; border-bottom: 2px solid #ddd; padding-bottom: 10px; text-align: center;">Current Settings</h3>
-            <!-- <<< CHANGE: Use grid for 3 columns or adjust styling as needed >>> -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 1.2rem; text-align: left; padding: 0 10px;">
                  <div>
                     <span style="font-weight: 600; color: #444;">Max Videos:</span>
@@ -75,9 +71,7 @@
             </div>
         </div>
 
-        <!-- **** REMOVED the extra wrapping div **** -->
-
-        <!-- Flash Messages Container (Now a direct child) -->
+        <!-- Flash Messages Container -->
         <div class="flash-message-container" style="width: 95%; margin: 10px auto 20px auto; text-align: center;">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -90,7 +84,7 @@
             {% endwith %}
         </div>
 
-        <!-- Settings Form (Now a direct child) -->
+        <!-- Settings Form -->
         <form method="POST" action="{{ url_for('update_settings', camera_id=camera_id) }}" class="settings-form">
             <label for="max_videos">Max Videos:</label>
             <!-- Use current_settings to pre-fill values -->
@@ -106,9 +100,6 @@
             <button type="submit" class="submit-button">Update Settings</button> 
         </form>
 
-        <!-- **** END of removed extra div section **** -->
-
-
         <div class="section-divider"></div>
 
         <!-- Control Buttons -->
@@ -118,7 +109,7 @@
             </form>
         </div>
 
-    </div> <!-- End of settings-container -->
+    </div> 
 
     <!-- Modal JavaScript -->
     <script>

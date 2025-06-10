@@ -330,14 +330,13 @@ button:hover {
 }
 
 #confirmLogoutBtn {
-    background-color: #dc3545; /* Example: Bootstrap's danger red */
-    color: white;             /* Example: White text */
-    border-color: #c82333;   /* Example: Slightly darker border */
-    /* Add any other styles like padding, font-weight if needed */
+    background-color: #dc3545; 
+    color: white;             
+    border-color: #c82333;   
 }
 
 /* Optional: Style on hover */
 #confirmLogoutBtn:hover {
-    background-color: #c82333; /* Example: Darker red on hover */
+    background-color: #c82333; 
     border-color: #bd2130;
 }
