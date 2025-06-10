@@ -199,44 +199,126 @@ button:hover { /* YOUR ORIGINAL BUTTON:HOVER */
 }
 
 
-/* Info Section Styling (common for all boxes on sensor_info page) */
+/* --- ENHANCEMENTS FOR INFO SECTIONS --- */
 .info-section {
     background-color: #ffffff;
-    padding: 25px; /* Increased padding */
-    margin-bottom: 20px;
+    padding: 20px 25px; /* Slightly adjust padding */
+    margin-bottom: 25px; /* Consistent margin */
     border-radius: 8px;
-    border: 1px solid #dee2e6;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+    border: 1px solid #e0e0e0; /* Lighter, softer border */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); /* Softer shadow */
 }
+
 .info-section h3 {
     margin-top: 0;
     border-bottom: 1px solid #e9ecef;
     padding-bottom: 12px;
-    margin-bottom: 18px;
-    font-size: 1.5em; /* Slightly larger section headings */
-    color: #343a40;
+    margin-bottom: 20px; /* More space below heading */
+    font-size: 1.3em;   /* Adjusted size */
+    color: #333;        /* Darker, more standard heading color */
+    font-weight: 600;   /* Slightly bolder */
 }
-.info-section p,
-.info-section li {
-    font-size: 1em;
-    line-height: 1.7; /* Increased line height for readability */
-    color: #495057;
+
+/* Styling for key-value pairs within info sections */
+.info-section p {
+    margin-bottom: 10px; /* Space between each p tag */
+    line-height: 1.6;
+    color: #555; /* Content text color */
+    font-size: 0.95em; /* Slightly smaller for content */
 }
-.info-section ul {
+.info-section p strong {
+    color: #333; /* Make the label part darker */
+    margin-right: 8px; /* Space after the colon */
+    display: inline-block; /* Ensures margin-right works well */
+    /* min-width: 120px; */ /* Optional: align values if labels have varying lengths */
+}
+.info-section p:last-child {
+    margin-bottom: 0;
+}
+
+.info-section p { /* Ensure some bottom margin for paragraphs if not already present */
+    margin-bottom: 8px; 
+}
+.info-section p:last-child { /* Remove bottom margin from the last paragraph in a group */
+    margin-bottom: 0;
+}
+
+/* --- ENHANCEMENTS FOR TIMESTAMP LIST --- */
+.info-section ul.timestamp-list { /* Added a specific class for more targeted styling */
     list-style: none;
     padding-left: 0;
-    max-height: 300px;
+    max-height: 280px; /* Adjusted max height */
     overflow-y: auto;
-    border: 1px solid #f0f0f0; /* Light border around scrollable list */
-    padding: 10px;
+    border: 1px solid #f0f0f0;
+    padding: 0; /* Remove padding if items have their own */
     border-radius: 4px;
+    background-color: #fdfdfd; /* Very light background for the list area */
 }
-.info-section ul li {
-    padding: 8px 5px;
-    border-bottom: 1px dotted #e9ecef;
+.info-section ul.timestamp-list li {
+    padding: 10px 12px; /* More padding per item */
+    border-bottom: 1px solid #f0f0f0; /* Lighter separator */
+    font-size: 0.9em;
+    color: #454545;
 }
-.info-section ul li:last-child {
+.info-section ul.timestamp-list li:last-child {
     border-bottom: none;
+}
+.info-section ul.timestamp-list li:hover { /* Subtle hover for list items */
+    background-color: #f5f5f5;
+}
+
+/* --- ENHANCEMENTS FOR SENSOR DETAILS FORM --- */
+.info-section form .form-label { /* Styles already exist, ensure they are good */
+    font-weight: 600; /* Bolder labels */
+    margin-top: 15px;
+    display: block;
+    color: #444;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+.info-section form .form-input,
+.info-section form .form-textarea { /* Styles already exist, ensure they are good */
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 18px; /* More space after input */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 0.95em;
+}
+.info-section form .form-textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+.info-section form .submit-button { /* Your existing .submit-button */
+    font-size: 1em; /* Adjusted size */
+    padding: 10px 20px; /* Adjusted padding */
+    border-radius: 5px;
+    background-color: #28a745; /* Green */
+    color: white;
+    border: none;
+    cursor: pointer;
+    margin-top: 10px; /* Space above button */
+    transition: background-color 0.2s ease, transform 0.15s ease;
+}
+.info-section form .submit-button:hover {
+    background-color: #218838;
+    transform: translateY(-1px); /* Subtle lift on hover */
+}
+
+
+/* --- ENHANCEMENTS FOR CAMERA INFO SECTION LAYOUT --- */
+.camera-info-details-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 30px; /* row-gap column-gap */
+}
+.camera-info-column {
+    flex: 1;
+    min-width: 220px; /* Adjust if needed */
+}
+.camera-info-column p { /* Specific styling for p tags in these columns */
+    font-size: 0.95em;
 }
 
 /* Form Specific Styles for sensor_info.html */
@@ -338,16 +420,48 @@ button:hover { /* YOUR ORIGINAL BUTTON:HOVER */
 }
 
 
-/* Action Buttons Container and Links for sensor_info.html footer */
+/* --- ENHANCEMENTS FOR BOTTOM ACTION BUTTONS --- */
 .action-buttons-container {
     text-align: center;
-    margin-top: 30px;
-    margin-bottom: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #e9ecef;
+    margin-top: 35px; /* More space above */
+    margin-bottom: 25px;
+    padding-top: 25px;
+    border-top: 1px solid #e0e0e0; /* Lighter separator */
 }
-/* Using your .control-button style for these links by adding the class in HTML */
-/* No new CSS needed if HTML uses <a class="control-button blue" ...> */
+/* Re-using your .control-button for consistency if you prefer */
+/* Or ensure .action-button-link has good styling */
+.action-button-link { /* Assuming you use this class from previous HTML */
+    display: inline-block;
+    padding: 12px 28px; /* Slightly more padding */
+    background-color: #007bff;
+    color: white !important;
+    text-decoration: none;
+    border-radius: 25px; /* More rounded */
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    margin: 5px 10px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.action-button-link:hover {
+    background-color: #0056b3;
+    text-decoration: none;
+    transform: translateY(-2px); /* Lift effect */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+.action-button-link.primary-action { /* For 'View All Incident Videos' */
+    background-color: #17a2b8; /* Teal/Info color */
+}
+.action-button-link.primary-action:hover {
+    background-color: #138496;
+}
+.action-button-link.secondary { /* For 'Back to Camera List' */
+    background-color: #6c757d; /* Grey */
+}
+.action-button-link.secondary:hover {
+    background-color: #5a6268;
+}
 
 
 /* No Data Placeholder */

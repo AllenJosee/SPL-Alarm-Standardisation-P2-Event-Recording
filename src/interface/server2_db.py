@@ -1476,8 +1476,33 @@ def sensor_info_page(camera_id):
 
     # Fetch incident trigger timestamps from the database for this camera
     incident_timestamps_list = []
+    total_recordings = 0
+    total_incident_clips = 0 # Renamed for clarity from total_incidents
     conn = get_db()
     cursor = conn.cursor()
+
+    # Get total normal recordings count
+    try:
+        query_recordings_count = f"SELECT COUNT(id) FROM {TABLE_NAME} WHERE camera_id = ?"
+        cursor.execute(query_recordings_count, (str(camera_id),))
+        count_result = cursor.fetchone()
+        if count_result:
+            total_recordings = count_result[0]
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching recordings count for cam {camera_id}: {e}")
+        flash("Error loading recordings count.", "error")
+
+    # Get total incident clips count
+    try:
+        query_incidents_count = f"SELECT COUNT(id) FROM {INCIDENT_TABLE_NAME} WHERE camera_id = ?"
+        cursor.execute(query_incidents_count, (str(camera_id),))
+        count_result = cursor.fetchone()
+        if count_result:
+            total_incident_clips = count_result[0]
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching incident clips count for cam {camera_id}: {e}")
+        flash("Error loading incident clips count.", "error")
+
     # Select distinct timestamps to avoid listing the same trigger time multiple times if multiple videos were saved for one incident trigger
     query = f"""
         SELECT DISTINCT incident_trigger_timestamp 
@@ -1502,7 +1527,9 @@ def sensor_info_page(camera_id):
                            camera_id=camera_id,
                            camera_description=camera.description,
                            sensor_details=current_sensor_details,
-                           incident_timestamps=incident_timestamps_list)
+                           incident_timestamps=incident_timestamps_list,
+                           total_recordings=total_recordings,                 # Pass new variable
+                           total_incident_clips=total_incident_clips)
 
 def release_all_cameras():
     print("Releasing all camera captures on exit...")
@@ -1512,7 +1539,7 @@ def release_all_cameras():
              if isinstance(camera, Camera): # Ensure it's a Camera object
                  camera.release_capture()
         print("Camera release attempts finished.")
-    else:
+    else:   
         print("No camera objects found to release.")
 
 atexit.register(release_all_cameras)

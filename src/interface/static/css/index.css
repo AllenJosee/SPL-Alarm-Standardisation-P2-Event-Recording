@@ -114,6 +114,14 @@ button {
     border: none;
     cursor: pointer;
 }
+
+.control-buttons form {
+    margin: 0; /* Remove default form margins */
+    padding: 0; /* Remove default form padding */
+    display: inline-block; /* Or 'contents' if you want the form to not affect layout at all */
+                           /* 'contents' makes the form's children act as direct children of the form's parent for layout purposes */
+}
+
 button:hover {
     background-color: #0056b3;
 }
