@@ -4,6 +4,10 @@
 
 #server2_db.py will work on raspberry pi running ubuntu. same functionalities as server2_db.py
 
+
+#11062025 Sensor_info page added to ubuntu version of server2_db.py
+
+
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
 import cv2
@@ -30,6 +34,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Directory of the curre
 SRC_DIR = os.path.dirname(SCRIPT_DIR)
 # PROJECT_ROOT_DIR = SPL-Alram-P2-Database/
 PROJECT_ROOT_DIR = os.path.dirname(SRC_DIR)
+
+SENSOR_DATA_FILE = os.path.join(PROJECT_ROOT_DIR, 'sensor_data.json')
 
 # --- Database Configuration ---
 DATABASE_NAME = 'videos.db'
@@ -102,6 +108,31 @@ def get_latest_recordings(limit=100):
     conn.close()
     return latest_recordings
 
+def load_sensor_data():
+    """Loads sensor data from the JSON file."""
+    if not os.path.exists(SENSOR_DATA_FILE):
+        return {}  # Return empty dict if file doesn't exist
+    try:
+        with open(SENSOR_DATA_FILE, 'r') as f:
+            data = json.load(f)
+            return data
+    except json.JSONDecodeError:
+        app.logger.error(f"Error decoding JSON from {SENSOR_DATA_FILE}. Returning empty data.")
+        return {}
+    except Exception as e:
+        app.logger.error(f"Error loading sensor data from {SENSOR_DATA_FILE}: {e}")
+        return {}
+
+def save_sensor_data(data):
+    """Saves sensor data to the JSON file."""
+    try:
+        with open(SENSOR_DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+        app.logger.info(f"Sensor data saved to {SENSOR_DATA_FILE}")
+        return True
+    except Exception as e:
+        app.logger.error(f"Error saving sensor data to {SENSOR_DATA_FILE}: {e}")
+        return False
 
 class Camera:
     #device index=0 -> webcam
@@ -1409,6 +1440,100 @@ def delete_main_incident_video(incident_db_id):
 def latest_recordings():
     recordings = get_latest_recordings()
     return render_template("latest_recordings.html", recordings=recordings, username=session['username'])'''
+
+@app.route('/sensor_info/<camera_id>', methods=['GET', 'POST'])
+@login_required
+def sensor_info_page(camera_id):
+    camera = cameras.get(camera_id)
+    if not camera:
+        flash(f"Camera {camera_id} not found.", "error")
+        return redirect(url_for('camera_list'))
+
+    all_sensor_data = load_sensor_data()
+    current_sensor_details = all_sensor_data.get(str(camera_id), {}) # Ensure camera_id is string for dict key
+
+    if request.method == 'POST':
+        # Handle saving new/updated sensor info
+        sensor_type = request.form.get('sensor_type', '').strip()
+        sensor_location = request.form.get('sensor_location', '').strip()
+        sensor_notes = request.form.get('sensor_notes', '').strip()
+        # Add more fields as needed
+
+        if not sensor_type and not sensor_location and not sensor_notes: # Basic validation: at least one field should be filled
+            flash("Please provide some information for the sensor.", "warning")
+        else:
+            updated_details = {
+                "type": sensor_type,
+                "location": sensor_location,
+                "notes": sensor_notes
+                # Add other fields from form here
+            }
+            all_sensor_data[str(camera_id)] = updated_details
+            if save_sensor_data(all_sensor_data):
+                flash(f"Sensor information for Camera {camera.description} ({camera_id}) updated successfully.", "success")
+                current_sensor_details = updated_details # Update for immediate display
+            else:
+                flash(f"Failed to save sensor information for Camera {camera.description} ({camera_id}).", "error")
+        # It's often better to redirect after POST to avoid form resubmission issues
+        return redirect(url_for('sensor_info_page', camera_id=camera_id))
+
+
+    # Fetch incident trigger timestamps from the database for this camera
+    incident_timestamps_list = []
+    total_recordings = 0
+    total_incident_clips = 0 # Renamed for clarity from total_incidents
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get total normal recordings count
+    try:
+        query_recordings_count = f"SELECT COUNT(id) FROM {TABLE_NAME} WHERE camera_id = ?"
+        cursor.execute(query_recordings_count, (str(camera_id),))
+        count_result = cursor.fetchone()
+        if count_result:
+            total_recordings = count_result[0]
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching recordings count for cam {camera_id}: {e}")
+        flash("Error loading recordings count.", "error")
+
+    # Get total incident clips count
+    try:
+        query_incidents_count = f"SELECT COUNT(id) FROM {INCIDENT_TABLE_NAME} WHERE camera_id = ?"
+        cursor.execute(query_incidents_count, (str(camera_id),))
+        count_result = cursor.fetchone()
+        if count_result:
+            total_incident_clips = count_result[0]
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching incident clips count for cam {camera_id}: {e}")
+        flash("Error loading incident clips count.", "error")
+
+    # Select distinct timestamps to avoid listing the same trigger time multiple times if multiple videos were saved for one incident trigger
+    query = f"""
+        SELECT DISTINCT incident_trigger_timestamp 
+        FROM {INCIDENT_TABLE_NAME} 
+        WHERE camera_id = ? 
+        ORDER BY incident_trigger_timestamp DESC
+    """
+    try:
+        cursor.execute(query, (str(camera_id),))
+        raw_timestamps = cursor.fetchall()
+        for row in raw_timestamps:
+            incident_timestamps_list.append({
+                "raw_iso": row["incident_trigger_timestamp"],
+                "display_sgt": format_display_timestamp_sgt(row["incident_trigger_timestamp"])
+            })
+    except sqlite3.Error as e:
+        app.logger.error(f"DB error fetching incident timestamps for sensor page (cam {camera_id}): {e}")
+        flash("Error loading incident timestamps.", "error")
+
+    return render_template('sensor_info.html',
+                           username=session['username'],
+                           camera_id=camera_id,
+                           camera_description=camera.description,
+                           sensor_details=current_sensor_details,
+                           incident_timestamps=incident_timestamps_list,
+                           total_recordings=total_recordings,               
+                           total_incident_clips=total_incident_clips)
 
 
 def release_all_cameras():
