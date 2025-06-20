@@ -2,11 +2,12 @@
 #retrieve and playback?
 #add lock function from server3.py
 
-#server2_db.py will work on raspberry pi running ubuntu. same functionalities as server2_db.py
-
-
 #11062025 Sensor_info page added to ubuntu version of server2_db.py
 
+#20062025 New Jetson Nano
+#codec changed : acv1 -> mp4v (compared to server2_db_ubuntu.py)
+#optimised for web playback using ffmpeg 
+#database and sensor page fixes
 
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
@@ -21,6 +22,8 @@ import sqlite3
 import logging
 import datetime
 from dateutil import parser # For parsing ISO 8601 timestamps
+import subprocess # <--- ADD THIS LINE
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -401,7 +404,7 @@ class Camera:
             absolute_filepath_for_cv = os.path.join(PROJECT_ROOT_DIR, relative_path_for_db)
             os.makedirs(os.path.dirname(absolute_filepath_for_cv), exist_ok=True) # Ensure directory exists
 
-            fourcc = cv2.VideoWriter_fourcc(*"avc1") # Codec (H.264)
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v") # Codec (H.264)
             if not hasattr(self, 'settings') or not self.settings: self.load_settings()
             video_duration_seconds = self.settings.get("video_duration", 5)
             fps = 15
@@ -460,6 +463,42 @@ class Camera:
 
                 out.release() # Release writer for this segment
                 app.logger.info(f"Cam {self.camera_id}: Wrote {frame_count} frames to {filename}.")
+                
+                if frame_count > 0:
+                    # --- NEW CODE BLOCK TO FIX MP4V FOR WEB ---
+                    try:
+                        # We will create a temporary fixed file and then replace the original
+                        # This is safer than trying to edit in-place.
+                        temp_output_path = absolute_filepath_for_cv + ".temp.mp4"
+                        
+                        # The ffmpeg command:
+                        # -i: input file
+                        # -c:v copy: copy the video stream without re-encoding (FAST!)
+                        # -movflags +faststart: This is the magic flag that moves the moov atom
+                        command = [
+                            'ffmpeg',
+                            '-i', absolute_filepath_for_cv,
+                            '-c:v', 'libx264',           # Re-encode video to H.264 (very compatible)
+                            '-preset', 'veryfast',       # Use a fast encoding preset to not slow down the server
+                            '-c:a', 'aac',               # Encode audio to AAC (standard for web)
+                            '-movflags', '+faststart',   # Keep this - it's still essential
+                            '-y',                        # Overwrite output file if it exists
+                            temp_output_path
+                        ]
+                        app.logger.info(f"Cam {self.camera_id}: Running ffmpeg to web-optimize the video...")
+                        # We use capture_output=True and text=True to hide ffmpeg's verbose output from the main console
+                        # but still be able to log it if there's an error.
+                        result = subprocess.run(command, check=True, capture_output=True, text=True)
+                        
+                        # If ffmpeg succeeded, replace the original file with the fixed one
+                        os.replace(temp_output_path, absolute_filepath_for_cv)
+                        app.logger.info(f"Cam {self.camera_id}: Successfully web-optimized {filename}.")
+
+                    except subprocess.CalledProcessError as e:
+                        # If ffmpeg fails, log the error and keep the original (unplayable in web) file
+                        app.logger.error(f"Cam {self.camera_id}: ffmpeg failed for {filename}. Stderr: {e.stderr}")
+                    except FileNotFoundError:
+                        app.logger.error("ffmpeg command not found. Please ensure ffmpeg is installed and in the system's PATH.")
 
                 if frame_count > 0:
                     # Store the ISO timestamp in the DB
@@ -994,6 +1033,8 @@ def delete_camera(camera_id):
 
     flash(f"Camera {camera_id} not found.", "warning")
     return "Camera not found", 404 # Or redirect(url_for('camera_list'))
+
+
 
 @app.route('/feed_view')
 #Placeholder for feed view, can be used to show live feeds or camera status

@@ -401,7 +401,7 @@ class Camera:
             absolute_filepath_for_cv = os.path.join(PROJECT_ROOT_DIR, relative_path_for_db)
             os.makedirs(os.path.dirname(absolute_filepath_for_cv), exist_ok=True) # Ensure directory exists
 
-            fourcc = cv2.VideoWriter_fourcc(*"avc1") # Codec (H.264)
+            fourcc = cv2.VideoWriter_fourcc(*"avc1") # Codec (H.264) #avc1 #mp4v
             if not hasattr(self, 'settings') or not self.settings: self.load_settings()
             video_duration_seconds = self.settings.get("video_duration", 5)
             fps = 15 
