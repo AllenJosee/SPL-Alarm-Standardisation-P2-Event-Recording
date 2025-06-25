@@ -229,7 +229,7 @@
             .then(data => {
                 if (data.success) {
                     console.log(`[executeVideoDeletion] Successfully deleted video (DB ID: ${videoDbId}) from server.`);
-                    alert(data.message || "Video deleted successfully.");
+                    //alert(data.message || "Video deleted successfully.");
                     const row = buttonElement.closest('tr');
                     if (row) row.remove();
                     

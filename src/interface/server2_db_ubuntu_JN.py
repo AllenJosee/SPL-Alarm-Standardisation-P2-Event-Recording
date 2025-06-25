@@ -317,7 +317,7 @@ class Camera:
                     try:
                         raw_ts_from_file = os.path.getctime(absolute_file_path) #file creation time
                         display_ts_from_file = time.ctime(raw_ts_from_file) # Convert to human-readable format
-                    except Exception as e:
+                    except Exception as e: 
                         app.logger.warning(f"Error getting ctime for {absolute_file_path}: {e}")
                 
                 videos.append({
