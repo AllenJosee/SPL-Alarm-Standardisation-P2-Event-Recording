@@ -31,6 +31,10 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__, template_folder='static/templates')
 app.secret_key = '14a6a86bf47bf75c4479c0c70886b2a5'  # Secret key for session management
 
+# --- Auto-Record Configuration ---
+AUTO_RECORD_ON_STARTUP = True  # Set to False to disable this feature entirely
+AUTO_RECORD_CAMERA_ID = "1"    # The ID of the camera you want to auto-record
+
 # --- Path Configurations ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Directory of the current script
 # SRC_DIR = SPL-Alram-P2-Database/src/
@@ -857,6 +861,31 @@ def login_required(f):
         return f(*args, **kwargs) # Proceed to the original function if authenticated
     return decorated_function
 
+def auto_start_recording_thread():
+    """
+    Waits a few seconds for the app to initialize, then starts the recording
+    thread for the camera specified in the configuration.
+    """
+    if not AUTO_RECORD_ON_STARTUP:
+        app.logger.info("Auto-recording on startup is disabled in the configuration.")
+        return
+
+    app.logger.info("Auto-record thread started. Waiting for app initialization...")
+    time.sleep(3)  # Give the server a moment to load cameras
+
+    # Safely get the camera object from the global dictionary
+    target_camera = cameras.get(AUTO_RECORD_CAMERA_ID)
+
+    if target_camera:
+        app.logger.info(f"Found target auto-record camera: ID {target_camera.camera_id}")
+        # Check if it's not already recording for some reason
+        if not target_camera.recording:
+            app.logger.info(f"Starting auto-recording for camera {target_camera.camera_id}...")
+            target_camera.start_recording_thread()
+        else:
+            app.logger.warning(f"Camera {target_camera.camera_id} is already marked as recording. Skipping auto-start.")
+    else:
+        app.logger.error(f"Auto-record camera ID '{AUTO_RECORD_CAMERA_ID}' not found in the loaded cameras. Auto-recording will not start.")
 
 ### Flask Routes ###
 @app.route("/", methods=['GET'])
@@ -922,7 +951,7 @@ def add_camera():
         if error is None:
             try:
                 # Use the validated string ID as the key
-                camera_id_key = new_camera_id_str
+                camera_id_key = new_camera_id_str   
                 new_camera = Camera(
                     camera_id=camera_id_key, # Pass the ID here
                     recordings_dir=f"src/recordings/camera{camera_id_key}",
@@ -1601,6 +1630,8 @@ atexit.register(release_all_cameras)
 
 if __name__ == "__main__":
     load_cameras_from_json()
+    auto_start_thread = Thread(target=auto_start_recording_thread)
+    auto_start_thread.daemon = True  # Allows main app to exit even if this thread is running
+    auto_start_thread.start()
     host = '0.0.0.0' # Listen on all available network interfaces
     app.run(debug=True, host='0.0.0.0', port=5001) # Port for the Flask development server
-        
