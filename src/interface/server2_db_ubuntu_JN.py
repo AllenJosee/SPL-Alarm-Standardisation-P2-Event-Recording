@@ -9,6 +9,9 @@
 #optimised for web playback using ffmpeg 
 #database and sensor page fixes
 
+# MERGED: Auto-record persistence from server3_auto_record.py implemented.
+# The designated auto-record camera will now continue recording after a user logs out.
+
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify, session, send_from_directory, flash, g
 import os
 import cv2
@@ -160,8 +163,8 @@ class Camera:
         self.recording_thread = None
         
         # Ensure directories exist (absolute paths needed for os.makedirs)
-        os.makedirs(recordings_dir, exist_ok=True)
-        os.makedirs(incidents_dir, exist_ok=True)
+        os.makedirs(os.path.join(PROJECT_ROOT_DIR, recordings_dir), exist_ok=True)
+        os.makedirs(os.path.join(PROJECT_ROOT_DIR, incidents_dir), exist_ok=True)
         self.load_settings() # Load camera-specific settings
 
     def _ensure_capture_initialized(self):
@@ -288,14 +291,15 @@ class Camera:
         )
 
     def load_settings(self):
-        if not os.path.exists(self.settings_file):
+        abs_settings_file = os.path.join(PROJECT_ROOT_DIR, self.settings_file)
+        if not os.path.exists(abs_settings_file):
             default_settings = {
                 "max_videos": 5, # Max number of normal recordings to kee
                 "video_duration": 5,  # Duration of each recording segment in seconds
             }
-            with open(self.settings_file, "w") as f:
+            with open(abs_settings_file, "w") as f:
                 json.dump(default_settings, f)
-        with open(self.settings_file, "r") as f:
+        with open(abs_settings_file, "r") as f:
             self.settings = json.load(f)
 
     def load_videos_from_database(self):
@@ -390,8 +394,10 @@ class Camera:
     def update_settings(self, max_videos, video_duration):
         self.settings["max_videos"] = max_videos
         self.settings["video_duration"] = video_duration
-        with open(self.settings_file, "w") as f:
+        abs_settings_file = os.path.join(PROJECT_ROOT_DIR, self.settings_file)
+        with open(abs_settings_file, "w") as f:
             json.dump(self.settings, f)
+        return True
 
     def record_video(self):
         #Core recording loop. Captures video segments and saves them.
@@ -795,15 +801,16 @@ def format_display_timestamp_sgt(iso_timestamp_str_utc):
 def save_cameras_to_json():
          #Saves the current 'cameras' dictionary (Camera objects) to 'cameras.json'
         camera_data = {camera_id: camera.to_dict() for camera_id, camera in cameras.items()}
+        abs_cameras_json_path = os.path.join(PROJECT_ROOT_DIR, 'cameras.json')
         print("Saving cameras to JSON:", camera_data)  # Debugging line
-        with open('cameras.json', 'w') as f:
+        with open(abs_cameras_json_path, 'w') as f:
             json.dump(camera_data, f)
         print("Cameras saved successfully.")
     
 def load_cameras_from_json():
     global cameras
     cameras = {} # Initialize/clear existing cameras
-    filepath = 'cameras.json'
+    filepath = os.path.join(PROJECT_ROOT_DIR, 'cameras.json')
     if os.path.exists(filepath):
         try:
             with open(filepath, 'r') as f:
@@ -916,7 +923,7 @@ def index(camera_id):
         return "Camera not found", 404
     
     # Get recording status from session to reflect current state on page load
-    recording_status = session.get('recording_status', 'stopped')  # Default to 'stopped'
+    recording_status = 'recording' if camera.recording else 'stopped'
     return render_template('index.html', username=session['username'], camera_id=camera_id, description=camera.description, recording_status=recording_status)
 
 @app.route('/camera_list')
@@ -1076,17 +1083,27 @@ def feed_view():
 @app.route('/logout', methods=['POST'])
 def logout():
     global cameras
-    if cameras: # Check if the global dictionary exists and is populated
+    if cameras:
         for camera_id, camera in cameras.items():
+            # The auto-record camera should continue recording on logout.
+            # Check if auto-recording is enabled in config AND if this is the target camera.
+            is_auto_record_cam = (AUTO_RECORD_ON_STARTUP and camera_id == AUTO_RECORD_CAMERA_ID)
+
+            if is_auto_record_cam:
+                app.logger.info(f"Logout: Skipping release for auto-record camera {camera_id}.")
+                continue  # Skip to the next camera
+
+            # For all other cameras, release them as usual.
             if isinstance(camera, Camera):
                 try:
-                    camera.release_capture() # Force release
+                    app.logger.info(f"Logout: Releasing non-auto-record camera {camera_id}.")
+                    camera.release_capture()
                 except Exception as e:
-                    print(f"Error releasing camera {camera_id} during logout: {e}")
-        print("Finished attempting camera releases for logout.")
+                    app.logger.error(f"Error releasing camera {camera_id} during logout: {e}")
+        app.logger.info("Finished camera release checks for logout.")
     else:
-        print("No 'cameras' dictionary found or it's empty during logout.")
-    
+        app.logger.info("No 'cameras' dictionary found or it's empty during logout.")
+
     session.clear()
     return redirect(url_for('login'))
 
@@ -1231,7 +1248,8 @@ def settings_page(camera_id):
     current_settings = {}
     try:
         # Attempt to load current settings from the camera's settings file
-        with open(camera.settings_file, 'r') as f:
+        abs_settings_file = os.path.join(PROJECT_ROOT_DIR, camera.settings_file)
+        with open(abs_settings_file, 'r') as f:
             current_settings = json.load(f)
     except Exception as e:
         print(f"Error loading settings for camera {camera_id}: {e}")
@@ -1634,4 +1652,4 @@ if __name__ == "__main__":
     auto_start_thread.daemon = True  # Allows main app to exit even if this thread is running
     auto_start_thread.start()
     host = '0.0.0.0' # Listen on all available network interfaces
-    app.run(debug=True, host='0.0.0.0', port=5001) # Port for the Flask development server
+    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=False) # use_reloader=False is important for background threads
