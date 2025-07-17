@@ -1,0 +1,17 @@
+output/
+logs/
+
+
+*.db
+*.sqlite3
+
+
+__pycache__/
+
+venv/
+.venv/
+
+
+.DS_Store
+
+Thumbs.db
