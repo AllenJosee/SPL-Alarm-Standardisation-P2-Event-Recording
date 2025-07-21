@@ -207,28 +207,28 @@ This is the complete structure of the project, reflecting all major components.
 ```
 .
 ├── ROI Detection/               # Standalone scripts for motion-based ROI event detection
-├── data/                      # Raw data for model training (if any)
-├── helmet_detection_runs/     # Output from YOLOv8 training/detection runs
-├── logs/                      # Application log files
-├── models/                    # Trained model files (e.g., best.pt for YOLO)
-├── output/                    # General output directory for generated files/videos
-├── src/                       # Main source code
+├── data/                        # Raw data for model training (if any)
+├── helmet_detection_runs/       # Output from YOLOv8 training/detection runs
+├── logs/                        # Application log files
+├── models/                      # Trained model files (best.pt for YOLO)
+├── output/                      # General output directory for generated files/videos
+├── src/                         # Main source code
 │   ├── interface/
-│   │   ├── main_app.py        # <<< MAIN APPLICATION ENTRY POINT
+│   │   ├── main_app.py          # <<< MAIN APPLICATION ENTRY POINT
 │   │   ├── video_manager_app.py # <<< DATABASE MANAGEMENT UTILITY
-│   │   ├── static/            # CSS, JS, images, and HTML templates for Flask
-│   │   ├── users.json         # User credentials for login
-│   │   └── _archive/          # Deprecated and experimental server scripts
-│   ├── recordings/          # Default location for continuous video segments
-│   ├── incidents/           # Default location for archived incident clips
-│   └── settings_cameraX.json # Per-camera settings files (created dynamically)
-├── tests/                     # Unit and integration tests for the application
-├── .gitignore                 # Specifies files for Git to ignore
-├── cameras.json               # Main configuration file for all cameras
-├── sensor_data.json           # Stores descriptive metadata for each sensor/camera
-├── videos.db                  # SQLite database for normal video metadata
-├── video_log.db               # (Likely) Another database, purpose to be confirmed
-└── README.md                  # This file
+│   │   ├── static/              # CSS, JS, images, and HTML templates for Flask
+│   │   ├── users.json           # User credentials for login
+│   │   └── _archive/            # Deprecated and experimental server scripts
+│   ├── recordings/              # Default location for continuous video segments
+│   ├── incidents/               # Default location for archived incident clips
+│   └── settings_cameraX.json    # Per-camera settings files (created dynamically)
+├── tests/                       # Unit and integration tests for the application
+├── .gitignore                   # Specifies files for Git to ignore
+├── cameras.json                 # Main configuration file for all cameras
+├── sensor_data.json             # Stores descriptive metadata for each sensor/camera
+├── videos.db                    # SQLite database for normal video metadata
+├── video_log.db                 # Old database (Not currently active)
+└── README.md                    # Project description and setup instructions
 ```
 
 ### Companion Utility: Video Manager
@@ -276,7 +276,8 @@ If you wish to run an archived script for testing or educational purposes:
 
 ### ROI Detection (Alternative Trigger Method)
 
-The `ROI Detection/` folder contains standalone Python scripts for an optional, alternative incident trigger method. This method uses traditional computer vision techniques instead of a deep learning model. **Note: This functionality is not yet integrated into the main Flask application.**
+The `ROI Detection/` folder contains standalone Python scripts for an optional, alternative incident trigger method. This method uses traditional computer vision techniques instead of a deep learning model. 
+**Note: This functionality is not yet integrated into the main Flask application.**
 
 #### How it Works
 
