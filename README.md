@@ -68,6 +68,7 @@ This section covers how to set up and run the application, with a manual method 
     -   `python3 -m venv venv`
     -   `source venv/bin/activate` (On Windows: `venv\Scripts\activate`)
 4.  **Install dependencies:**
+
     *(A `requirements.txt` file is highly recommended. You can create one via `pip freeze > requirements.txt`.)*
     ```sh
     pip install Flask opencv-python numpy python-dateutil
@@ -85,6 +86,7 @@ After running the application, you need your machine's local IP address to acces
 
 1.  Open **Command Prompt** or **PowerShell**.
 2.  Type the following command and press Enter:
+
     ```sh
     ipconfig
     ```
@@ -94,6 +96,7 @@ After running the application, you need your machine's local IP address to acces
 
 1.  Open a **Terminal**.
 2.  Type the following command and press Enter:
+
     ```sh
     ip addr
     ```
@@ -192,7 +195,7 @@ docker run -d \
 | `docker restart ads-autorecord`       | Restart the container.                                |
 | `docker logs ads-autorecord`          | View the application's output and logs.               |
 | `docker logs -f ads-autorecord`       | Follow the logs in real-time.                         |
-| `docker rm ads-autorecord`            | Permanently delete the container (must be stopped).   |
+| `docker rm ads-autorecord`            | Permanently delete the container (must be stopped first).   |
 | `docker image list`                   | List all Docker images on your system.                |
 | `docker image prune`                  | Remove old, unused image builds to save space.        |
 
